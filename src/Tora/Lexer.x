@@ -32,8 +32,87 @@ tokens :-
   <0> $digit+ { tokInteger }
   <0> $digit+\.$digit+ { tokFloat }
   <0> "=" { tok (TOp EQUAL) }
+  <0> "+" { tok (TOp PLUS) }
+  <0> "-" { tok (TOp MINUS) }
+  <0> "*" { tok (TOp MUL) }
+  <0> "/" { tok (TOp DIV) }
+
+  <0> "{" { tok TBraceLeft }
+  <0> "}" { tok TBraceRight }
+  <0> "(" { tok TParenLeft }
+  <0> ")" { tok TParenRight }
+  <0> "[" { tok TBracketLeft }
+  <0> "]" { tok TBracketRight }
+
+  <0> "type"      { tok TType }
+  <0> "of"        { tok TArrayOf }
+  <0> "int"       { tok TTyInt }
+  <0> "string"    { tok TTyString }
+  <0> ":"         { tok TColon }
+  <0> ";"         { tok TSemicolon }
+  <0> ","         { tok TComma }
+  <0> "var"       { tok TVar }
+  <0> ":="        { tok TVarDecEquals }
+  <0> "function"  { tok TFun }
+  <0> "if"        { tok TIf }
+  <0> "then"      { tok TThen }
+  <0> "else"      { tok TElse }
+  <0> "."         { tok TDot }
+  <0> "let"       { tok TLet }
+  <0> "in"        { tok TIn }
+  <0> "end"       { tok TEnd }
+  <0> "nil"       { tok TNil }
+  <0> "while"     { tok TWhile }
+  <0> "for"       { tok TFor }
+  <0> "break"     { tok TBreak }
+  --TODO String Literal
+  --TODO Escape sequences
 
 {
+
+data Token
+  = TOp TOperator
+  | TIdentifier ByteString
+  | TParenLeft
+  | TParenRight
+  | TBraceLeft
+  | TBraceRight
+  | TBracketLeft
+  | TBracketRight
+  | TType
+  | TArrayOf
+  | TColon
+  | TSemicolon
+  | TComma
+  | TVar
+  | TVarDecEquals
+  | TTyInt
+  | TTyString
+  | TInteger Int
+  | TFloat Float
+  | TFun
+  | TIf
+  | TThen
+  | TElse
+  | TDot
+  | TLet
+  | TIn
+  | TEnd
+  | TNil
+  | TWhile
+  | TFor
+  | TBreak
+  | TEOF
+
+  deriving (Eq, Show)
+
+--TODO flatten operators back into token becuase theres Arith and DeclEqual
+--TODO Arithemtic
+--TODO BOOL OPERATORS
+data TOperator = EQUAL | PLUS | MINUS | MUL | DIV
+  deriving (Eq, Show)
+
+
 
 --type AlexAction result = AlexInput -> Int64 -> Alex result
 --type AlexInput = (AlexPosn, Char, ByteString, Int64)
@@ -47,6 +126,7 @@ alexInitUserState = AlexUserState
   { nestLevel = 0
   }
 
+--TODO mtl?
 get :: Alex AlexUserState
 get = Alex $ \s -> Right (s, alex_ust s)
 
@@ -87,18 +167,6 @@ data RangedToken = RangedToken
   { rtToken :: Token
   , rtRange :: Range
   } deriving (Eq, Show)
-
-data Token
-  = TOp TOperator
-  | TIdentifier ByteString
-  | TEOF
-  | TInteger Int
-  | TFloat Float
-
-  deriving (Eq, Show)
-
-data TOperator = EQUAL
-  deriving (Eq, Show)
 
 mkRange :: AlexInput -> Int64 -> Range
 mkRange (start, _, str, _) len = Range{start = start, stop = stop}
