@@ -5,5 +5,7 @@ pkgs.mkShell {
     haskell.compiler.ghc8107
     cabal-install
     hlint
+    alex
+    happy
   ];
 }
