@@ -15,6 +15,7 @@ $digit = 0-9
 $alpha = [a-zA-Z]
 $alphanumeric = [_a-zA-Z0-9]
 $eol = [\n]
+$quote = \"
 
 tokens :-
   -- Whitespace insensitive
@@ -30,6 +31,11 @@ tokens :-
   <comment> "*/" { unnestComment }
   <comment> \n ;
   <comment> . ;
+
+  -- We're just doing basic string literals. I don't care about the escape stuff for now.
+  <0> $quote      { startStringLiteral `andBegin` stringLiteral }
+  <stringLiteral> $quote { endStringLiteral }
+  <stringLiteral> $alphanumeric+ { tokString}
 
   <0> "type"      { tok TType }
   <0> "array of"  { tok TArrayOf }
@@ -152,11 +158,13 @@ data TOperator = EQUAL | PLUS | MINUS | MUL | DIV
 
 data AlexUserState = AlexUserState
   { nestLevel :: Int
+  , stringLit :: Bool
   }
 
 alexInitUserState :: AlexUserState
 alexInitUserState = AlexUserState
   { nestLevel = 0
+  , stringLit = False
   }
 
 --TODO mtl?
@@ -181,6 +189,18 @@ unnestComment input len = do
   put state{nestLevel = level}
   when (level == 0) $
     alexSetStartCode 0
+  skip input len
+
+startStringLiteral :: AlexAction RangedToken
+startStringLiteral input len = do
+  modify $ \s -> s{stringLit = True}
+  skip input len
+
+endStringLiteral :: AlexAction RangedToken
+endStringLiteral input len = do
+  state <- get
+  put state{stringLit = False}
+  alexSetStartCode 0
   skip input len
 
 alexEOF :: Alex RangedToken
