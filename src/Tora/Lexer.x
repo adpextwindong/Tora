@@ -20,6 +20,9 @@ tokens :-
   -- Whitespace insensitive
   <0> $white+     ;
 
+  -- Identifiers
+
+  <0> $alpha $alphanumeric*   { tokId }
   --Comment and nested comment handling
   <0> "*/" { \p _ -> alexError $ "Error: unexpected closing comment" }
   <0> "/*" { nestComment `andBegin` comment }
@@ -28,14 +31,29 @@ tokens :-
   <comment> \n ;
   <comment> . ;
 
-  <0> $alpha $alphanumeric*   { tokId }
+  <0> "type"      { tok TType }
+  <0> "array of"  { tok TArrayOf }
+  <0> "of"        { tok TOf }       -- See QUEENS.TIG
+  <0> "function"  { tok TFun }
+
+  <0> "int"       { tok $ TTypeName TInt }
+  <0> "string"    { tok $ TTypeName TStr }
+
   <0> $digit+ { tokInteger }
   <0> $digit+\.$digit+ { tokFloat }
-  <0> "=" { tok (TOp EQUAL) }
-  <0> "+" { tok (TOp PLUS) }
-  <0> "-" { tok (TOp MINUS) }
-  <0> "*" { tok (TOp MUL) }
-  <0> "/" { tok (TOp DIV) }
+
+  <0> "="   { tok TEQUAL }
+  <0> "+"   { tok TPLUS }
+  <0> "-"   { tok TMINUS }
+  <0> "*"   { tok TMUL }
+  <0> "/"   { tok TDIV }
+  <0> "<>"  { tok TNEQUAL }
+  <0> ">"   { tok TGT }
+  <0> "<"   { tok TLT }
+  <0> ">="  { tok TGTE }
+  <0> "<="  { tok TLTE }
+  <0> "&"   { tok TBAnd }
+  <0> "|"   { tok TBor }
 
   <0> "{" { tok TBraceLeft }
   <0> "}" { tok TBraceRight }
@@ -43,17 +61,12 @@ tokens :-
   <0> ")" { tok TParenRight }
   <0> "[" { tok TBracketLeft }
   <0> "]" { tok TBracketRight }
+  <0> ":" { tok TColon }
+  <0> ";" { tok TSemicolon }
+  <0> "," { tok TComma }
 
-  <0> "type"      { tok TType }
-  <0> "of"        { tok TArrayOf }
-  <0> "int"       { tok TTyInt }
-  <0> "string"    { tok TTyString }
-  <0> ":"         { tok TColon }
-  <0> ";"         { tok TSemicolon }
-  <0> ","         { tok TComma }
   <0> "var"       { tok TVar }
   <0> ":="        { tok TVarDecEquals }
-  <0> "function"  { tok TFun }
   <0> "if"        { tok TIf }
   <0> "then"      { tok TThen }
   <0> "else"      { tok TElse }
@@ -63,38 +76,28 @@ tokens :-
   <0> "end"       { tok TEnd }
   <0> "nil"       { tok TNil }
   <0> "while"     { tok TWhile }
+  <0> "do"        { tok TDo }
   <0> "for"       { tok TFor }
   <0> "break"     { tok TBreak }
+
   --TODO String Literal
   --TODO Escape sequences
 
 {
 
+
 data Token
-  = TOp TOperator
-  | TIdentifier ByteString
-  | TParenLeft
-  | TParenRight
-  | TBraceLeft
-  | TBraceRight
-  | TBracketLeft
-  | TBracketRight
-  | TType
+  = TIdentifier ByteString
+  | TType                   -- For Type Decl
   | TArrayOf
-  | TColon
-  | TSemicolon
-  | TComma
+  | TOf                     -- See QUEENS.TIG
+  | TTypeName TypeName      -- For predefined types like Int and String
+  | TVarDecEquals           -- ":="
   | TVar
-  | TVarDecEquals
-  | TTyInt
-  | TTyString
-  | TInteger Int
-  | TFloat Float
   | TFun
   | TIf
   | TThen
   | TElse
-  | TDot
   | TLet
   | TIn
   | TEnd
@@ -102,17 +105,50 @@ data Token
   | TWhile
   | TFor
   | TBreak
-  | TEOF
+  | TDot
+  | TDo
 
+  -- Literals
+  | TInteger Int
+  | TFloat Float
+  --TODO String Literal
+
+  -- Symbols
+  | TParenLeft
+  | TParenRight
+
+  | TBraceLeft
+  | TBraceRight
+
+  | TBracketLeft
+  | TBracketRight
+
+  | TColon
+  | TSemicolon
+  | TComma
+
+  -- Operator Symbols
+  | TPLUS
+  | TMINUS
+  | TMUL
+  | TDIV
+  | TEQUAL
+  | TNEQUAL
+  | TGT
+  | TLT
+  | TGTE
+  | TLTE
+  | TBAnd
+  | TBor
+
+  | TEOF
+    deriving (Eq, Show)
+
+data TypeName = TInt | TStr
   deriving (Eq, Show)
 
---TODO flatten operators back into token becuase theres Arith and DeclEqual
---TODO Arithemtic
---TODO BOOL OPERATORS
 data TOperator = EQUAL | PLUS | MINUS | MUL | DIV
   deriving (Eq, Show)
-
-
 
 --type AlexAction result = AlexInput -> Int64 -> Alex result
 --type AlexInput = (AlexPosn, Char, ByteString, Int64)
