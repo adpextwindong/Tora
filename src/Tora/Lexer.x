@@ -36,9 +36,6 @@ tokens :-
   <0> "of"        { tok TOf }       -- See QUEENS.TIG
   <0> "function"  { tok TFun }
 
-  <0> "int"       { tok $ TTypeName TInt }
-  <0> "string"    { tok $ TTypeName TStr }
-
   <0> $digit+ { tokInteger }
   <0> $digit+\.$digit+ { tokFloat }
 
@@ -91,7 +88,6 @@ data Token
   | TType                   -- For Type Decl
   | TArrayOf
   | TOf                     -- See QUEENS.TIG
-  | TTypeName TypeName      -- For predefined types like Int and String
   | TVarDecEquals           -- ":="
   | TVar
   | TFun
@@ -109,8 +105,9 @@ data Token
   | TDo
 
   -- Literals
-  | TInteger Int
-  | TFloat Float
+  | TIntegerLit Int
+  | TFloatLit Float
+  | TStringLit BS.ByteString
   --TODO String Literal
 
   -- Symbols
@@ -226,14 +223,21 @@ tok ctor inp len =
 tokInteger :: AlexAction RangedToken
 tokInteger inp@(_,_, str, _) len =
   pure RangedToken
-    { rtToken = TInteger $ read $ BS.unpack $ BS.take len str
+    { rtToken = TIntegerLit $ read $ BS.unpack $ BS.take len str
     , rtRange = mkRange inp len
     }
 
 tokFloat :: AlexAction RangedToken
 tokFloat inp@(_,_, str, _) len =
   pure RangedToken
-    { rtToken = TFloat $ read $ BS.unpack $ BS.take len str
+    { rtToken = TFloatLit $ read $ BS.unpack $ BS.take len str
+    , rtRange = mkRange inp len
+    }
+
+tokString :: AlexAction RangedToken
+tokString inp@(_,_, str, _) len =
+  pure RangedToken
+    { rtToken = TStringLit $ BS.take len str
     , rtRange = mkRange inp len
     }
 
