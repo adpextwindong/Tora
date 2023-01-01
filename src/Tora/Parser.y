@@ -2,6 +2,7 @@
 {-# LANGUAGE DeriveFoldable #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE DeriveFunctor #-}
 
 module Tora.Parser
   ( parseTiger
@@ -48,15 +49,15 @@ import Tora.QQ
   integerLiteral    { L.RangedToken (L.TIntegerLit _) _ }
   floatLiteral      { L.RangedToken (L.TFloatLit _) _ }
   stringLiteral     { L.RangedToken (L.TStringLit _) _ }
-  parenLeft         { L.RangedToken (L.TParenLeft) _ }
-  parenRight        { L.RangedToken (L.TParenRight) _ }
-  braceLeft         { L.RangedToken (L.TBraceLeft) _ }
-  braceRight        { L.RangedToken (L.TBraceRight) _ }
-  bracketLeft       { L.RangedToken (L.TBracketLeft) _ }
-  bracketRight      { L.RangedToken (L.TBracketRight) _ }
-  colon             { L.RangedToken (L.TColon) _ }
+  '('               { L.RangedToken (L.TParenLeft) _ }
+  ')'               { L.RangedToken (L.TParenRight) _ }
+  '{'               { L.RangedToken (L.TBraceLeft) _ }
+  '}'               { L.RangedToken (L.TBraceRight) _ }
+  '['               { L.RangedToken (L.TBracketLeft) _ }
+  ']'               { L.RangedToken (L.TBracketRight) _ }
+  ':'               { L.RangedToken (L.TColon) _ }
   semicolon         { L.RangedToken (L.TSemicolon) _ }
-  comma             { L.RangedToken (L.TComma) _ }
+  ','               { L.RangedToken (L.TComma) _ }
   plus              { L.RangedToken (L.TPLUS) _ }
   minus             { L.RangedToken (L.TMINUS) _ }
   mul               { L.RangedToken (L.TMUL) _ }
@@ -73,6 +74,20 @@ import Tora.QQ
 
 %%
 
+-- UTILS
+optional(p)
+  : { Nothing }
+  | p { Just $1 }
+
+many_rev(p)
+  :         { [] }
+  | many_rev(p) p { $2 : $1 }
+
+many(p)
+  : many_rev(p) { reverse $1 }
+
+-- Grammar
+
 declaration :: { Declaration L.Range }
             : typeDeclaration             { $1 }
             -- TODO VarDecl
@@ -83,24 +98,48 @@ typeDeclaration :: { Declaration L.Range }
 
 ty :: { Type L.Range }
    : name { TVar (info $1) $1 }
+   | '{' optional(record) '}' { TRecord (L.rtRange $1 <-> L.rtRange $3) (concat $2) }
 
 name :: { Name L.Range }
      : identifier { unTok $1 (\range (L.TIdentifier name) -> Name range name) }
+
+record :: { [RecordField L.Range] }
+       : recordField many(commaRecordField)    { $1 : $2 }
+
+recordField :: { RecordField L.Range }
+            : name ':' ty                  { RecordField (info $1 <-> info $3) $1 $3 }
+
+commaRecordField :: { RecordField L.Range }
+            : ',' name ':' ty              { RecordField (info $2 <-> info $4) $2 $4 }
 {
+
+---------
+-- AST --
+---------
 
 data Declaration a
   = TypeDeclaration a (Name a) (Type a)
   -- | VarDeclaration
   -- | FunDeclaration
-  deriving (Foldable, Show)
+  deriving (Functor, Foldable, Show)
 
 data Name a
   = Name a ByteString
-  deriving (Foldable, Show)
+  deriving (Functor, Foldable, Show)
 
 data Type a
   = TVar a (Name a)
-  deriving (Foldable, Show)
+  | TRecord a [RecordField a]
+  deriving (Functor, Foldable, Show)
+
+data RecordField a
+  = RecordField a (Name a) (Type a)
+  deriving (Functor, Foldable, Show)
+
+
+-----------
+-- UTILS --
+-----------
 
 -- | Build a simple node by extracting its token type and range.
 unTok :: L.RangedToken -> (L.Range -> L.Token -> a) -> a
@@ -127,19 +166,78 @@ lexer = (=<< L.alexMonadScan)
 
 runParser src = L.runAlex src parseTiger
 
+-----------
+-- TESTS --
+-----------
+
 runParserTests = runTestTT testParser
 
 testParser :: Test
 testParser = TestList
-  [testTypeId]
+  [testTypeId
+  ,testRecordType]
 
 testTypeId :: Test
 testTypeId = TestCase $ do
-  let input = [tigerSrc|type foo = int |]
+  let input = [tigerSrc| type foo = int |]
   let output = fromRight' $ runParser input
   let test = \case
         (TypeDeclaration _ (Name _ "foo") (TVar _ (Name _ "int"))) -> True
         _ -> False
   assertBool "type id test" $ test output
+
+testRecordType = TestList
+  [testRecordTypeMulti
+  ,testRecordTypeLeadingComma
+  ,testRecordTypeSingleField
+  ,testRecordTypeNoFields]
+
+testRecordTypeMulti :: Test
+testRecordTypeMulti = TestCase $ do
+  let input = [tigerSrc|type any = {any : int, foo : baz} |]
+  let output = fromRight' $ runParser input
+
+  let test = \case
+        (TypeDeclaration _ (Name _ "any")
+          (TRecord _ [(RecordField _ (Name _ "any") (TVar _ (Name _ "int")))
+                     ,(RecordField _ (Name _ "foo") (TVar _ (Name _ "baz")))
+                      ])) -> True
+        _ -> False
+
+  assertBool "type record test" $ test output
+
+testRecordTypeLeadingComma :: Test
+testRecordTypeLeadingComma = TestCase $ do
+  let input = [tigerSrc|type any = {,any : int, foo : baz} |]
+  assertBool "type record leading comma fails" $ isLeft $ runParser input
+
+testRecordTypeSingleField = TestCase $ do
+  let input = [tigerSrc|type any = {any : int} |]
+  let output = fromRight' $ runParser input
+
+  let test = \case
+        (TypeDeclaration _ (Name _ "any")
+          (TRecord _ [(RecordField _ (Name _ "any") (TVar _ (Name _ "int")))])) -> True
+        _ -> False
+
+  assertBool "type record single field" $ test output
+
+testRecordTypeNoFields = TestCase $ do
+  let input = [tigerSrc|type any = {} |]
+  let output = fromRight' $ runParser input
+
+  let test = \case
+        (TypeDeclaration _ (Name _ "any")
+          (TRecord _ [])) -> True
+        _ -> False
+
+  assertBool "type record no fields" $ test output
+
+t1 :: ByteString
+t1 = [tigerSrc| type any = {any : int, foo : baz} |]
+t2 = displayAST . fromRight' $ runParser t1
+
+displayAST :: (Functor f) => f a -> f ()
+displayAST = fmap (const ())
 
 }
