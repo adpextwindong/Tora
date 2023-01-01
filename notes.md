@@ -4,13 +4,11 @@
 
 - [ ] Declarations
   - [ ] Type Declaration
+      - [x] Type Id
+      - [ ] { Record Type Fields }
+      - [ ] Array of Type
   - [ ] Var Declaration
   - [ ] Function Declaration
-
-- [ ] Data types
-  - [ ] Type Id
-  - [ ] { Record Type Fields }
-  - [ ] Array of Type
 
 - [ ] Expressions
   - [ ] Paren

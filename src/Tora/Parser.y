@@ -1,6 +1,7 @@
 {
 {-# LANGUAGE DeriveFoldable #-}
 {-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE LambdaCase #-}
 
 module Tora.Parser
   ( parseTiger
@@ -9,12 +10,15 @@ module Tora.Parser
 import Data.ByteString.Lazy.Char8 (ByteString)
 import Data.Maybe (fromJust)
 import Data.Monoid (First (..))
+import Test.HUnit
+import Data.Either
+import Data.Either.Extra
 
 import qualified Tora.Lexer as L
 import Tora.QQ
 }
 
-%name parseTiger
+%name parseTiger declaration
 %tokentype { L.RangedToken }
 %error { parseError }
 %monad { L.Alex } { >>= } { pure }
@@ -57,7 +61,7 @@ import Tora.QQ
   minus             { L.RangedToken (L.TMINUS) _ }
   mul               { L.RangedToken (L.TMUL) _ }
   div               { L.RangedToken (L.TDIV) _ }
-  equal             { L.RangedToken (L.TEQUAL) _ }
+  '='               { L.RangedToken (L.TEQUAL) _ }
   nequal            { L.RangedToken (L.TNEQUAL) _ }
   greaterThan       { L.RangedToken (L.TGT) _ }
   lessThan          { L.RangedToken (L.TLT) _ }
@@ -75,18 +79,43 @@ declaration :: { Declaration L.Range }
             -- TODO FunDecl
 
 typeDeclaration :: { Declaration L.Range }
-                : type identifier '=' type { undefined } -- TODO
+                : type name '=' ty { TypeDeclaration (L.rtRange $1 <-> info $4) $2 $4 }
 
+ty :: { Type L.Range }
+   : name { TVar (info $1) $1 }
 
-empty : {}
-
+name :: { Name L.Range }
+     : identifier { unTok $1 (\range (L.TIdentifier name) -> Name range name) }
 {
 
 data Declaration a
-  = TypeDeclaration a
+  = TypeDeclaration a (Name a) (Type a)
   -- | VarDeclaration
   -- | FunDeclaration
   deriving (Foldable, Show)
+
+data Name a
+  = Name a ByteString
+  deriving (Foldable, Show)
+
+data Type a
+  = TVar a (Name a)
+  deriving (Foldable, Show)
+
+-- | Build a simple node by extracting its token type and range.
+unTok :: L.RangedToken -> (L.Range -> L.Token -> a) -> a
+unTok (L.RangedToken tok range) ctor = ctor range tok
+
+-- | Unsafely extracts the the metainformation field of a node.
+info :: Foldable f => f a -> a
+info = fromJust . getFirst . foldMap pure
+
+-- | Performs the union of two ranges by creating a new range starting at the
+-- start position of the first range, and stopping at the stop position of the
+-- second range.
+-- Invariant: The LHS range starts before the RHS range.
+(<->) :: L.Range -> L.Range -> L.Range
+L.Range a1 _ <-> L.Range _ b2 = L.Range a1 b2
 
 parseError :: L.RangedToken -> L.Alex a
 parseError _ = do
@@ -96,8 +125,21 @@ parseError _ = do
 lexer :: (L.RangedToken -> L.Alex a) -> L.Alex a
 lexer = (=<< L.alexMonadScan)
 
-t1 :: ByteString
-t1 = [tigerSrc| foo |]
-
 runParser src = L.runAlex src parseTiger
+
+runParserTests = runTestTT testParser
+
+testParser :: Test
+testParser = TestList
+  [testTypeId]
+
+testTypeId :: Test
+testTypeId = TestCase $ do
+  let input = [tigerSrc|type foo = int |]
+  let output = fromRight' $ runParser input
+  let test = \case
+        (TypeDeclaration _ (Name _ "foo") (TVar _ (Name _ "int"))) -> True
+        _ -> False
+  assertBool "type id test" $ test output
+
 }
