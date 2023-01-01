@@ -1,5 +1,6 @@
 {
 {-# LANGUAGE DeriveFoldable #-}
+{-# LANGUAGE QuasiQuotes #-}
 
 module Tora.Parser
   ( parseTiger
@@ -10,6 +11,7 @@ import Data.Maybe (fromJust)
 import Data.Monoid (First (..))
 
 import qualified Tora.Lexer as L
+import Tora.QQ
 }
 
 %name parseTiger
@@ -67,9 +69,25 @@ import qualified Tora.Lexer as L
 
 %%
 
+declaration :: { Declaration L.Range }
+            : typeDeclaration             { $1 }
+            -- TODO VarDecl
+            -- TODO FunDecl
+
+typeDeclaration :: { Declaration L.Range }
+                : type identifier '=' type { undefined } -- TODO
+
+
 empty : {}
 
 {
+
+data Declaration a
+  = TypeDeclaration a
+  -- | VarDeclaration
+  -- | FunDeclaration
+  deriving (Foldable, Show)
+
 parseError :: L.RangedToken -> L.Alex a
 parseError _ = do
   (L.AlexPn _ line column, _, _, _) <- L.alexGetInput
@@ -77,4 +95,9 @@ parseError _ = do
 
 lexer :: (L.RangedToken -> L.Alex a) -> L.Alex a
 lexer = (=<< L.alexMonadScan)
+
+t1 :: ByteString
+t1 = [tigerSrc| foo |]
+
+runParser src = L.runAlex src parseTiger
 }

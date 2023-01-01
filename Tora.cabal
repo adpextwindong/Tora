@@ -30,13 +30,15 @@ library
                       ,bytestring
                       ,HUnit
                       ,extra
+                      ,template-haskell
 
     hs-source-dirs:   src
     default-language: Haskell2010
     build-tools-depends: alex:alex, happy:happy
-    exposed-modules:  Tora.Lexer
-                     ,Tora.Parser
-
+    exposed-modules:
+                     Tora.Parser
+                    ,Tora.Lexer
+                    ,Tora.QQ
 
 executable Tora
     main-is:          Main.hs
