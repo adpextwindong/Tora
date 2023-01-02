@@ -21,7 +21,7 @@
   - [ ] The No Value () expression (not unit??)
   - [x] Integer Literal
   - [ ] String Literal
-  - [ ] Expression Sequences where last returns
+  - [x] Expression Sequences where last returns
   - [ ] Negation
   - [ ] Arithmetic
   - [ ] Comparrison
@@ -47,7 +47,7 @@
 - [ ] Mutually recursive types. A collection of types may be recursive or mutually recursive. Mutually recursive types are declared by a consectuive sequence of type declarations without intervening value or function declarations. Each recursion cycle must pass through a record or array type.
 - [ ] If the initializing expression is `nil`, then the long form must be used.
 - [ ] Mutually recursive functions are declared by a sequence of consecutive function declarations.
-
+- [ ] Expr Seq, evals all the expressions in order and the result of a seq is the result (if any) yielded by the last of the expressions.
 
 ### Reference
 

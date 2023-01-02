@@ -56,7 +56,7 @@ import Tora.QQ
   '['               { L.RangedToken (L.TBracketLeft) _ }
   ']'               { L.RangedToken (L.TBracketRight) _ }
   ':'               { L.RangedToken (L.TColon) _ }
-  semicolon         { L.RangedToken (L.TSemicolon) _ }
+  ';'         { L.RangedToken (L.TSemicolon) _ }
   ','               { L.RangedToken (L.TComma) _ }
   plus              { L.RangedToken (L.TPLUS) _ }
   minus             { L.RangedToken (L.TMINUS) _ }
@@ -116,8 +116,14 @@ funDeclaration :: { Declaration L.Range }
 typeAnnotation :: { Type L.Range }
                : ':' ty { $2 }
 
+exprs :: { Expr L.Range }
+      : expr many(semicolonExpr) { ExprSeq (info $1 <-> listInfo $2) ($1 : $2) }
+
+semicolonExpr :: { Expr L.Range }
+          : ';' expr { $2 }
+
 expr :: { Expr L.Range }
-     : '(' expr ')' { $2 }
+     : '(' exprs ')' { $2 }
      | nil { NilExpr (L.rtRange $1) }
      | integerLiteral { unTok $1 (\range (L.TIntegerLit v) -> IntLitExpr (L.rtRange $1) v) }
 
@@ -166,6 +172,7 @@ data TyField a
 data Expr a
   = NilExpr a
   | IntLitExpr a Int
+  | ExprSeq a [Expr a]
   deriving (Functor, Foldable, Show)
 
 data Program a
@@ -221,7 +228,7 @@ testParser = TestList
   ,testFunDecl
   ,testArrayDecl
   ,testExprProgram
-  ,testExprParens ]
+  ,testExprSeqAndParens ]
 
 testTypeId :: Test
 testTypeId = TestCase $ do
@@ -359,12 +366,12 @@ testExprProgram = TestCase $ do
 
   assertBool "ProgExpr test" $ test output
 
-testExprParens = TestCase $ do
-  let input = [tigerSrc| ( ( 5 ) ) |]
+testExprSeqAndParens = TestCase $ do
+  let input = [tigerSrc| ( 5 ) |]
   let output = testParse input
 
   let test = \case
-        (ProgExpr _ (IntLitExpr _ 5)) -> True
+        (ProgExpr _ (ExprSeq _ [(IntLitExpr _ 5)])) -> True
         _ -> False
 
   assertBool "Paren Expr Test" $ test output
@@ -373,7 +380,7 @@ testParse :: ByteString -> Program L.Range
 testParse = fromRight' . runParser
 
 t1 :: ByteString
-t1 = [tigerSrc| ( ( 5 ) ) |]
+t1 = [tigerSrc| ( 5 ) |]
 t2 = displayAST . fromRight' $ runParser t1
 
 displayAST :: (Functor f) => f a -> f ()
