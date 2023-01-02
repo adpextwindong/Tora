@@ -8,7 +8,7 @@
       - [x] { Record Type Fields }
       - [ ] Array of Type
   - [x] Var Declaration
-  - [ ] Function Declaration
+  - [x] Function Declaration
 
 - [ ] Expressions
   - [ ] Paren

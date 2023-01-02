@@ -95,7 +95,7 @@ declarations :: { [Declaration L.Range] }
 declaration :: { Declaration L.Range }
             : typeDeclaration             { $1 }
             | varDeclaration              { $1 }
-            -- TODO FunDecl
+            | funDeclaration              { $1 }
 
 typeDeclaration :: { Declaration L.Range }
                 : type name '=' ty { TypeDeclaration (L.rtRange $1 <-> info $4) $2 $4 }
@@ -103,6 +103,11 @@ typeDeclaration :: { Declaration L.Range }
 varDeclaration :: { Declaration L.Range }
                : var name optional(typeAnnotation) varDecEquals expr
                   { VarDeclaration (L.rtRange $1 <-> info $5) $2 $3 $5 }
+
+
+funDeclaration :: { Declaration L.Range }
+               : function name '(' tyFields ')' optional(typeAnnotation) '=' expr
+                  { FunDeclaration (L.rtRange $1 <-> info $8) $2 $4 $6 $8 }
 
 typeAnnotation :: { Type L.Range }
                : ':' ty { $2 }
@@ -113,19 +118,19 @@ expr :: { Expr L.Range }
 
 ty :: { Type L.Range }
    : name { TVar (info $1) $1 }
-   | '{' optional(record) '}' { TRecord (L.rtRange $1 <-> L.rtRange $3) (concat $2) }
+   | '{' optional(tyFields) '}' { TRecord (L.rtRange $1 <-> L.rtRange $3) (concat $2) }
 
 name :: { Name L.Range }
      : identifier { unTok $1 (\range (L.TIdentifier name) -> Name range name) }
 
-record :: { [RecordField L.Range] }
-       : recordField many(commaRecordField)    { $1 : $2 }
+tyFields :: { [TyField L.Range] }
+       : tyField many(commaTyField)    { $1 : $2 }
 
-recordField :: { RecordField L.Range }
-            : name ':' ty                  { RecordField (info $1 <-> info $3) $1 $3 }
+tyField :: { TyField L.Range }
+            : name ':' ty                  { TyField (info $1 <-> info $3) $1 $3 }
 
-commaRecordField :: { RecordField L.Range }
-            : ',' name ':' ty              { RecordField (info $2 <-> info $4) $2 $4 }
+commaTyField :: { TyField L.Range }
+            : ',' name ':' ty              { TyField (info $2 <-> info $4) $2 $4 }
 {
 
 ---------
@@ -135,7 +140,7 @@ commaRecordField :: { RecordField L.Range }
 data Declaration a
   = TypeDeclaration a (Name a) (Type a)
   | VarDeclaration a (Name a) (Maybe (Type a)) (Expr a)
-  -- | FunDeclaration
+  | FunDeclaration a (Name a) [TyField a] (Maybe (Type a)) (Expr a)
   deriving (Functor, Foldable, Show)
 
 data Name a
@@ -144,11 +149,11 @@ data Name a
 
 data Type a
   = TVar a (Name a)
-  | TRecord a [RecordField a]
+  | TRecord a [TyField a]
   deriving (Functor, Foldable, Show)
 
-data RecordField a
-  = RecordField a (Name a) (Type a)
+data TyField a
+  = TyField a (Name a) (Type a)
   deriving (Functor, Foldable, Show)
 
 data Expr a
@@ -195,7 +200,8 @@ testParser :: Test
 testParser = TestList
   [testTypeId
   ,testRecordType
-  ,testVarDecl]
+  ,testVarDecl
+  ,testFunDecl]
 
 testTypeId :: Test
 testTypeId = TestCase $ do
@@ -219,8 +225,8 @@ testRecordTypeMulti = TestCase $ do
 
   let test = \case
         (TypeDeclaration _ (Name _ "any")
-          (TRecord _ [(RecordField _ (Name _ "any") (TVar _ (Name _ "int")))
-                     ,(RecordField _ (Name _ "foo") (TVar _ (Name _ "baz")))
+          (TRecord _ [(TyField _ (Name _ "any") (TVar _ (Name _ "int")))
+                     ,(TyField _ (Name _ "foo") (TVar _ (Name _ "baz")))
                       ])) -> True
         _ -> False
 
@@ -237,7 +243,7 @@ testRecordTypeSingleField = TestCase $ do
 
   let test = \case
         (TypeDeclaration _ (Name _ "any")
-          (TRecord _ [(RecordField _ (Name _ "any") (TVar _ (Name _ "int")))])) -> True
+          (TRecord _ [(TyField _ (Name _ "any") (TVar _ (Name _ "int")))])) -> True
         _ -> False
 
   assertBool "type record single field" $ test output
@@ -279,11 +285,45 @@ testVarDeclNoAnnotation = TestCase $ do
 
   assertBool "varDecl without type annotation" $ test output
 
+testFunDecl
+  = TestList
+  [ testFunDeclNoAnnotation
+  , testFunDeclWithAnnotation
+  , testFunDeclWithBadAnnotation ]
+
+testFunDeclNoAnnotation = TestCase $ do
+  let input = [tigerSrc| function foo(bar : int) = 5 |]
+  let output = testParse input
+
+  let test = \case
+        (FunDeclaration _ (Name _ "foo") [TyField _ (Name _ "bar") (TVar _ (Name _ "int"))] Nothing
+          (IntLitExpr _ 5)) -> True
+        _ -> False
+
+  assertBool "funDecl without type annotation" $ test output
+
+testFunDeclWithAnnotation = TestCase $ do
+  let input = [tigerSrc| function foo(quux : int, baz : int) : int = 5 |]
+  let output = testParse input
+
+  let test = \case
+        (FunDeclaration _ (Name _ "foo") [TyField _ (Name _ "quux") (TVar _ (Name _ "int"))
+                                         ,TyField _ (Name _ "baz") (TVar _ (Name _ "int"))]
+                        (Just (TVar _ (Name _ "int")))
+                        (IntLitExpr _ 5)) -> True
+        _ -> False
+
+  assertBool "funDecl with type annotation" $ test output
+
+testFunDeclWithBadAnnotation = TestCase $ do
+  let input = [tigerSrc| function foo(bar, baz : int) : int = 5 |]
+  assertBool "funDecl missing typefield type annotation fails" $ isLeft . runParser $ input
+
 testParse :: ByteString -> Declaration L.Range
 testParse = fromRight' . runParser
 
 t1 :: ByteString
-t1 = [tigerSrc| var foo := 5 |]
+t1 = [tigerSrc| function foo(bar : int, baz : int) : int = 5 |]
 t2 = displayAST . fromRight' $ runParser t1
 
 displayAST :: (Functor f) => f a -> f ()
