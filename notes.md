@@ -7,19 +7,19 @@
       - [x] Type Id
       - [x] { Record Type Fields }
       - [ ] Array of Type
-  - [ ] Var Declaration
+  - [x] Var Declaration
   - [ ] Function Declaration
 
 - [ ] Expressions
   - [ ] Paren
-  - [ ] Nil
+  - [x] Nil
   - [ ] Let ...vardec.. in e end
   - [ ] LValues
     - [ ] identifier
     - [ ] dot operator (lvalue . id)
     - [ ] lvalue array access
   - [ ] The No Value () expression (not unit??)
-  - [ ] Integer Literal
+  - [x] Integer Literal
   - [ ] String Literal
   - [ ] Expression Sequences where last returns
   - [ ] Negation
@@ -41,6 +41,9 @@
 - [ ] Associativity
 
 
+## Semantic Analysis
+
+- [ ] If the initializing expression is `nil`, then the long form must be used.
 ### Reference
 
 [https://www.lrde.epita.fr/~tiger/tiger.html#Syntactic-Specifications](https://www.lrde.epita.fr/~tiger/tiger.html#Syntactic-Specifications)

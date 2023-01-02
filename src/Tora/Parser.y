@@ -88,13 +88,28 @@ many(p)
 
 -- Grammar
 
+--TODO test declarations
+declarations :: { [Declaration L.Range] }
+             : many(declaration) { $1 }
+
 declaration :: { Declaration L.Range }
             : typeDeclaration             { $1 }
-            -- TODO VarDecl
+            | varDeclaration              { $1 }
             -- TODO FunDecl
 
 typeDeclaration :: { Declaration L.Range }
                 : type name '=' ty { TypeDeclaration (L.rtRange $1 <-> info $4) $2 $4 }
+
+varDeclaration :: { Declaration L.Range }
+               : var name optional(typeAnnotation) varDecEquals expr
+                  { VarDeclaration (L.rtRange $1 <-> info $5) $2 $3 $5 }
+
+typeAnnotation :: { Type L.Range }
+               : ':' ty { $2 }
+
+expr :: { Expr L.Range }
+     : nil { NilExpr (L.rtRange $1) }
+     | integerLiteral { unTok $1 (\range (L.TIntegerLit v) -> IntLitExpr (L.rtRange $1) v) }
 
 ty :: { Type L.Range }
    : name { TVar (info $1) $1 }
@@ -119,7 +134,7 @@ commaRecordField :: { RecordField L.Range }
 
 data Declaration a
   = TypeDeclaration a (Name a) (Type a)
-  -- | VarDeclaration
+  | VarDeclaration a (Name a) (Maybe (Type a)) (Expr a)
   -- | FunDeclaration
   deriving (Functor, Foldable, Show)
 
@@ -136,6 +151,10 @@ data RecordField a
   = RecordField a (Name a) (Type a)
   deriving (Functor, Foldable, Show)
 
+data Expr a
+  = NilExpr a
+  | IntLitExpr a Int
+  deriving (Functor, Foldable, Show)
 
 -----------
 -- UTILS --
@@ -175,7 +194,8 @@ runParserTests = runTestTT testParser
 testParser :: Test
 testParser = TestList
   [testTypeId
-  ,testRecordType]
+  ,testRecordType
+  ,testVarDecl]
 
 testTypeId :: Test
 testTypeId = TestCase $ do
@@ -233,8 +253,37 @@ testRecordTypeNoFields = TestCase $ do
 
   assertBool "type record no fields" $ test output
 
+testVarDecl
+  = TestList
+  [testVarDeclWithAnnotation
+  ,testVarDeclNoAnnotation]
+
+testVarDeclWithAnnotation = TestCase $ do
+  let input = [tigerSrc| var foo : any := nil|]
+  let output = fromRight' . runParser $ input
+
+  let test = \case
+        (VarDeclaration _ (Name _ "foo") (Just (TVar _ (Name _ "any")))
+          (NilExpr _)) -> True
+        _ -> False
+
+  assertBool "varDecl with type annotation" $ test output
+
+testVarDeclNoAnnotation = TestCase $ do
+  let input = [tigerSrc| var foo := 5 |]
+  let output = testParse input
+
+  let test = \case
+        (VarDeclaration _ (Name _ "foo") Nothing (IntLitExpr _ 5)) -> True
+        _ -> False
+
+  assertBool "varDecl without type annotation" $ test output
+
+testParse :: ByteString -> Declaration L.Range
+testParse = fromRight' . runParser
+
 t1 :: ByteString
-t1 = [tigerSrc| type any = {any : int, foo : baz} |]
+t1 = [tigerSrc| var foo := 5 |]
 t2 = displayAST . fromRight' $ runParser t1
 
 displayAST :: (Functor f) => f a -> f ()
