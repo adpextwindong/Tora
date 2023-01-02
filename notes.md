@@ -13,7 +13,7 @@
 - [ ] Expressions
   - [x] Parens
   - [x] Nil
-  - [ ] Let ...vardec.. in e end
+  - [x] Let ...vardec.. in e end
   - [ ] LValues
     - [ ] identifier
     - [ ] dot operator (lvalue . id)

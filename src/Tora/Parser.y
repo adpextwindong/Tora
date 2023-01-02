@@ -126,6 +126,7 @@ expr :: { Expr L.Range }
      : '(' exprs ')' { $2 }
      | nil { NilExpr (L.rtRange $1) }
      | integerLiteral { unTok $1 (\range (L.TIntegerLit v) -> IntLitExpr (L.rtRange $1) v) }
+     | let declarations in exprs end { LetExpr (L.rtRange $1 <-> info $4) $2 $4 }
 
 ty :: { Type L.Range }
    : name { TVar (info $1) $1 }
@@ -173,6 +174,7 @@ data Expr a
   = NilExpr a
   | IntLitExpr a Int
   | ExprSeq a [Expr a]
+  | LetExpr a [Declaration a] (Expr a) -- | Uses an ExprSeq
   deriving (Functor, Foldable, Show)
 
 data Program a
@@ -214,9 +216,9 @@ lexer = (=<< L.alexMonadScan)
 
 runParser src = L.runAlex src parseTiger
 
------------
--- TESTS --
------------
+----------------
+-- TEST SUITE --
+----------------
 
 runParserTests = runTestTT testParser
 
@@ -228,7 +230,8 @@ testParser = TestList
   ,testFunDecl
   ,testArrayDecl
   ,testExprProgram
-  ,testExprSeqAndParens ]
+  ,testExprSeqAndParens
+  ,testLetExpr]
 
 testTypeId :: Test
 testTypeId = TestCase $ do
@@ -376,11 +379,43 @@ testExprSeqAndParens = TestCase $ do
 
   assertBool "Paren Expr Test" $ test output
 
+testLetExpr
+  = TestList
+  [testLetExprMulti
+  ,testLetExprEmptyShouldFail
+  ,testLetEmptyDecs]
+
+testLetExprMulti = TestCase $ do
+  let input = [tigerSrc| let var foo := 5 var bar := nil in 6; 7 end |]
+  let output = testParse input
+
+  let test = \case
+        (ProgExpr _ (LetExpr _ [VarDeclaration _ (Name _ "foo") Nothing (IntLitExpr _ 5),VarDeclaration _ (Name _ "bar") Nothing (NilExpr _)] (ExprSeq _ [IntLitExpr _ 6,IntLitExpr _ 7]))) -> True
+
+  assertBool "LetExprMulti Test" $ test output
+
+testLetExprEmptyShouldFail = TestCase $ do
+  let input = [tigerSrc| let in end |]
+  assertBool "LetExprMulti Test" $ testShouldFail input
+
+testLetEmptyDecs = TestCase $ do
+  let input = [tigerSrc| let in 5 end |]
+  let output = testParse input
+
+  let test = \case
+        (ProgExpr _ (LetExpr _ [] (ExprSeq _ [IntLitExpr _ 5]))) -> True
+        _ -> False
+
+  assertBool "LetExprMulti Test" $ test output
+
 testParse :: ByteString -> Program L.Range
 testParse = fromRight' . runParser
 
+testShouldFail :: ByteString -> Bool
+testShouldFail = isLeft . runParser
+
 t1 :: ByteString
-t1 = [tigerSrc| ( 5 ) |]
+t1 = [tigerSrc| let in 5 end |]
 t2 = displayAST . fromRight' $ runParser t1
 
 displayAST :: (Functor f) => f a -> f ()
