@@ -117,7 +117,8 @@ typeAnnotation :: { Type L.Range }
                : ':' ty { $2 }
 
 expr :: { Expr L.Range }
-     : nil { NilExpr (L.rtRange $1) }
+     : '(' expr ')' { $2 }
+     | nil { NilExpr (L.rtRange $1) }
      | integerLiteral { unTok $1 (\range (L.TIntegerLit v) -> IntLitExpr (L.rtRange $1) v) }
 
 ty :: { Type L.Range }
@@ -219,7 +220,8 @@ testParser = TestList
   ,testVarDecl
   ,testFunDecl
   ,testArrayDecl
-  ,testExprProgram ]
+  ,testExprProgram
+  ,testExprParens ]
 
 testTypeId :: Test
 testTypeId = TestCase $ do
@@ -357,12 +359,21 @@ testExprProgram = TestCase $ do
 
   assertBool "ProgExpr test" $ test output
 
+testExprParens = TestCase $ do
+  let input = [tigerSrc| ( ( 5 ) ) |]
+  let output = testParse input
+
+  let test = \case
+        (ProgExpr _ (IntLitExpr _ 5)) -> True
+        _ -> False
+
+  assertBool "Paren Expr Test" $ test output
 
 testParse :: ByteString -> Program L.Range
 testParse = fromRight' . runParser
 
 t1 :: ByteString
-t1 = [tigerSrc| type intArray = array of int |]
+t1 = [tigerSrc| ( ( 5 ) ) |]
 t2 = displayAST . fromRight' $ runParser t1
 
 displayAST :: (Functor f) => f a -> f ()

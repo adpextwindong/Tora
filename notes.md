@@ -2,16 +2,16 @@
 
 ## Parser
 
-- [ ] Declarations
-  - [ ] Type Declaration
+- [x] Declarations
+  - [x] Type Declaration
       - [x] Type Id
       - [x] { Record Type Fields }
-      - [ ] Array of Type
+      - [x] Array of Type
   - [x] Var Declaration
   - [x] Function Declaration
 
 - [ ] Expressions
-  - [ ] Paren
+  - [x] Parens
   - [x] Nil
   - [ ] Let ...vardec.. in e end
   - [ ] LValues
@@ -39,7 +39,7 @@
 
 - [ ] Precedence of operators
 - [ ] Associativity
-
+- [x] Program AST decls and exprs
 
 ## Semantic Analysis
 
