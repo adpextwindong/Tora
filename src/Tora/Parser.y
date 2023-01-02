@@ -19,7 +19,7 @@ import qualified Tora.Lexer as L
 import Tora.QQ
 }
 
-%name parseTiger declaration
+%name parseTiger program
 %tokentype { L.RangedToken }
 %error { parseError }
 %monad { L.Alex } { >>= } { pure }
@@ -87,6 +87,10 @@ many(p)
   : many_rev(p) { reverse $1 }
 
 -- Grammar
+
+program :: { Program L.Range }
+        : expr { ProgExpr (info $1) $1 }
+        | declarations { ProgDecls (listInfo $1) $1 }
 
 --TODO test declarations
 declarations :: { [Declaration L.Range] }
@@ -163,6 +167,11 @@ data Expr a
   | IntLitExpr a Int
   deriving (Functor, Foldable, Show)
 
+data Program a
+  = ProgExpr a (Expr a)
+  | ProgDecls a [Declaration a]
+  deriving (Functor, Foldable, Show)
+
 -----------
 -- UTILS --
 -----------
@@ -174,6 +183,11 @@ unTok (L.RangedToken tok range) ctor = ctor range tok
 -- | Unsafely extracts the the metainformation field of a node.
 info :: Foldable f => f a -> a
 info = fromJust . getFirst . foldMap pure
+
+listInfo :: Foldable f => [f L.Range] -> L.Range
+listInfo (x:xs) = info x <-> getLast xs
+  where getLast (x:[]) = info x
+        getLast (x:xs) = getLast xs
 
 -- | Performs the union of two ranges by creating a new range starting at the
 -- start position of the first range, and stopping at the stop position of the
@@ -204,14 +218,15 @@ testParser = TestList
   ,testRecordType
   ,testVarDecl
   ,testFunDecl
-  ,testArrayDecl]
+  ,testArrayDecl
+  ,testExprProgram ]
 
 testTypeId :: Test
 testTypeId = TestCase $ do
   let input = [tigerSrc| type foo = int |]
   let output = fromRight' $ runParser input
   let test = \case
-        (TypeDeclaration _ (Name _ "foo") (TVar _ (Name _ "int"))) -> True
+        (ProgDecls _ [(TypeDeclaration _ (Name _ "foo") (TVar _ (Name _ "int")))]) -> True
         _ -> False
   assertBool "type id test" $ test output
 
@@ -227,10 +242,10 @@ testRecordTypeMulti = TestCase $ do
   let output = fromRight' $ runParser input
 
   let test = \case
-        (TypeDeclaration _ (Name _ "any")
+        (ProgDecls _ [(TypeDeclaration _ (Name _ "any")
           (TRecord _ [(TyField _ (Name _ "any") (TVar _ (Name _ "int")))
                      ,(TyField _ (Name _ "foo") (TVar _ (Name _ "baz")))
-                      ])) -> True
+                      ]))]) -> True
         _ -> False
 
   assertBool "type record test" $ test output
@@ -245,8 +260,8 @@ testRecordTypeSingleField = TestCase $ do
   let output = fromRight' $ runParser input
 
   let test = \case
-        (TypeDeclaration _ (Name _ "any")
-          (TRecord _ [(TyField _ (Name _ "any") (TVar _ (Name _ "int")))])) -> True
+        (ProgDecls _ [(TypeDeclaration _ (Name _ "any")
+          (TRecord _ [(TyField _ (Name _ "any") (TVar _ (Name _ "int")))]))]) -> True
         _ -> False
 
   assertBool "type record single field" $ test output
@@ -256,8 +271,8 @@ testRecordTypeNoFields = TestCase $ do
   let output = fromRight' $ runParser input
 
   let test = \case
-        (TypeDeclaration _ (Name _ "any")
-          (TRecord _ [])) -> True
+        (ProgDecls _ [(TypeDeclaration _ (Name _ "any")
+          (TRecord _ []))]) -> True
         _ -> False
 
   assertBool "type record no fields" $ test output
@@ -272,8 +287,8 @@ testVarDeclWithAnnotation = TestCase $ do
   let output = fromRight' . runParser $ input
 
   let test = \case
-        (VarDeclaration _ (Name _ "foo") (Just (TVar _ (Name _ "any")))
-          (NilExpr _)) -> True
+        (ProgDecls _ [(VarDeclaration _ (Name _ "foo") (Just (TVar _ (Name _ "any")))
+          (NilExpr _))]) -> True
         _ -> False
 
   assertBool "varDecl with type annotation" $ test output
@@ -283,7 +298,7 @@ testVarDeclNoAnnotation = TestCase $ do
   let output = testParse input
 
   let test = \case
-        (VarDeclaration _ (Name _ "foo") Nothing (IntLitExpr _ 5)) -> True
+        (ProgDecls _ [(VarDeclaration _ (Name _ "foo") Nothing (IntLitExpr _ 5))]) -> True
         _ -> False
 
   assertBool "varDecl without type annotation" $ test output
@@ -299,8 +314,8 @@ testFunDeclNoAnnotation = TestCase $ do
   let output = testParse input
 
   let test = \case
-        (FunDeclaration _ (Name _ "foo") [TyField _ (Name _ "bar") (TVar _ (Name _ "int"))] Nothing
-          (IntLitExpr _ 5)) -> True
+        (ProgDecls _ [(FunDeclaration _ (Name _ "foo") [TyField _ (Name _ "bar") (TVar _ (Name _ "int"))] Nothing
+          (IntLitExpr _ 5))]) -> True
         _ -> False
 
   assertBool "funDecl without type annotation" $ test output
@@ -310,10 +325,10 @@ testFunDeclWithAnnotation = TestCase $ do
   let output = testParse input
 
   let test = \case
-        (FunDeclaration _ (Name _ "foo") [TyField _ (Name _ "quux") (TVar _ (Name _ "int"))
-                                         ,TyField _ (Name _ "baz") (TVar _ (Name _ "int"))]
-                        (Just (TVar _ (Name _ "int")))
-                        (IntLitExpr _ 5)) -> True
+        (ProgDecls _ [(FunDeclaration _ (Name _ "foo") [TyField _ (Name _ "quux") (TVar _ (Name _ "int"))
+                                                       ,TyField _ (Name _ "baz") (TVar _ (Name _ "int"))]
+                                        (Just (TVar _ (Name _ "int")))
+                                        (IntLitExpr _ 5))]) -> True
         _ -> False
 
   assertBool "funDecl with type annotation" $ test output
@@ -327,12 +342,23 @@ testArrayDecl = TestCase $ do
   let output = testParse input
 
   let test = \case
-        (TypeDeclaration _ (Name _ "intArray") (TArray _ (TVar _ (Name _ "int")))) -> True
+        (ProgDecls _ [(TypeDeclaration _ (Name _ "intArray") (TArray _ (TVar _ (Name _ "int"))))]) -> True
         _ -> False
 
   assertBool "array type declaration" $ test output
 
-testParse :: ByteString -> Declaration L.Range
+testExprProgram = TestCase $ do
+  let input = [tigerSrc| 5 |]
+  let output = testParse input
+
+  let test = \case
+        (ProgExpr _ (IntLitExpr _ 5)) -> True
+        _ -> False
+
+  assertBool "ProgExpr test" $ test output
+
+
+testParse :: ByteString -> Program L.Range
 testParse = fromRight' . runParser
 
 t1 :: ByteString
