@@ -119,6 +119,7 @@ expr :: { Expr L.Range }
 ty :: { Type L.Range }
    : name { TVar (info $1) $1 }
    | '{' optional(tyFields) '}' { TRecord (L.rtRange $1 <-> L.rtRange $3) (concat $2) }
+   | arrayOf ty                 { TArray (L.rtRange $1 <-> info $2) $2 }
 
 name :: { Name L.Range }
      : identifier { unTok $1 (\range (L.TIdentifier name) -> Name range name) }
@@ -150,6 +151,7 @@ data Name a
 data Type a
   = TVar a (Name a)
   | TRecord a [TyField a]
+  | TArray a (Type a)
   deriving (Functor, Foldable, Show)
 
 data TyField a
@@ -201,7 +203,8 @@ testParser = TestList
   [testTypeId
   ,testRecordType
   ,testVarDecl
-  ,testFunDecl]
+  ,testFunDecl
+  ,testArrayDecl]
 
 testTypeId :: Test
 testTypeId = TestCase $ do
@@ -319,11 +322,21 @@ testFunDeclWithBadAnnotation = TestCase $ do
   let input = [tigerSrc| function foo(bar, baz : int) : int = 5 |]
   assertBool "funDecl missing typefield type annotation fails" $ isLeft . runParser $ input
 
+testArrayDecl = TestCase $ do
+  let input = [tigerSrc| type intArray = array of int |]
+  let output = testParse input
+
+  let test = \case
+        (TypeDeclaration _ (Name _ "intArray") (TArray _ (TVar _ (Name _ "int")))) -> True
+        _ -> False
+
+  assertBool "array type declaration" $ test output
+
 testParse :: ByteString -> Declaration L.Range
 testParse = fromRight' . runParser
 
 t1 :: ByteString
-t1 = [tigerSrc| function foo(bar : int, baz : int) : int = 5 |]
+t1 = [tigerSrc| type intArray = array of int |]
 t2 = displayAST . fromRight' $ runParser t1
 
 displayAST :: (Functor f) => f a -> f ()
