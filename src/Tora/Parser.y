@@ -242,7 +242,8 @@ testParser = TestList
   ,testExprProgram
   ,testExprSeqAndParens
   ,testLetExpr
-  ,testIfThenElseExpr]
+  ,testIfThenElseExpr
+  ,testStringLiteral ]
 
 testTypeId :: Test
 testTypeId = TestCase $ do
@@ -449,6 +450,16 @@ testIfThenElseDangling = TestCase $ do
 testMissingIfThenElse = TestCase $ do
   let input = [tigerSrc| if then 10 else 20 |]
   assertBool "Missing if clause should fail." $ testShouldFail input
+
+testStringLiteral = TestCase $ do
+  let input = [tigerSrc| "foo" |]
+  let output = testParse input
+
+  let test = \case
+        (ProgExpr _ (StringLitExpr _ "foo")) -> True
+        _ -> False
+
+  assertBool "String literal test" $ test output
 
 testParse :: ByteString -> Program L.Range
 testParse = fromRight' . runParser
