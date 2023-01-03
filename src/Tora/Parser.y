@@ -126,7 +126,13 @@ expr :: { Expr L.Range }
      : '(' exprs ')' { $2 }
      | nil { NilExpr (L.rtRange $1) }
      | integerLiteral { unTok $1 (\range (L.TIntegerLit v) -> IntLitExpr (L.rtRange $1) v) }
+     | stringLiteral { unTok $1 (\range (L.TStringLit v) -> StringLitExpr (L.rtRange $1) v) }
      | let declarations in exprs end { LetExpr (L.rtRange $1 <-> info $4) $2 $4 }
+     | if expr then expr %shift { IFThenExpr (L.rtRange $1 <-> info $4) $2 $4 }
+     | if expr then expr else expr { IFThenElseExpr (L.rtRange $1 <-> info $6) $2 $4 $6 }
+
+elseExpr :: { Expr L.Range }
+         : else expr { $2 }
 
 ty :: { Type L.Range }
    : name { TVar (info $1) $1 }
@@ -173,8 +179,12 @@ data TyField a
 data Expr a
   = NilExpr a
   | IntLitExpr a Int
+  | StringLitExpr a ByteString
   | ExprSeq a [Expr a]
   | LetExpr a [Declaration a] (Expr a) -- | Uses an ExprSeq
+  | IFThenExpr a (Expr a) (Expr a)
+  | IFThenElseExpr a (Expr a) (Expr a) (Expr a)
+  -- | IFEExpr a (Expr a) (Expr a) (Maybe (Expr a)) -- TODO remove shift conflict
   deriving (Functor, Foldable, Show)
 
 data Program a
@@ -231,7 +241,8 @@ testParser = TestList
   ,testArrayDecl
   ,testExprProgram
   ,testExprSeqAndParens
-  ,testLetExpr]
+  ,testLetExpr
+  ,testIfThenElseExpr]
 
 testTypeId :: Test
 testTypeId = TestCase $ do
@@ -408,6 +419,37 @@ testLetEmptyDecs = TestCase $ do
 
   assertBool "LetExprMulti Test" $ test output
 
+testIfThenElseExpr
+  = TestList
+  [testIfThenElse
+  ,testMissingIfThenElse
+  ,testIfThenElseDangling]
+
+testIfThenElse = TestCase $ do
+  let input = [tigerSrc| if 1 then 10 else 20 |]
+  let output = testParse input
+
+  let test = \case
+        (ProgExpr _ (IFThenElseExpr _ (IntLitExpr _ 1) (IntLitExpr _ 10) (IntLitExpr _ 20))) -> True
+        _ -> False
+
+  assertBool "Standard ife test" $ test output
+
+testIfThenElseDangling = TestCase $ do
+  let input = [tigerSrc| if 1 then if 2 then 3 else 4 |]
+  let output = testParse input
+
+  let test = \case
+        (ProgExpr _ (IFThenExpr _ (IntLitExpr _ 1) (IFThenElseExpr _ (IntLitExpr _ 2) (IntLitExpr _ 3) (IntLitExpr _ 4)))) -> True
+
+        _ -> False
+
+  assertBool "Dangling ife test" $ test output
+
+testMissingIfThenElse = TestCase $ do
+  let input = [tigerSrc| if then 10 else 20 |]
+  assertBool "Missing if clause should fail." $ testShouldFail input
+
 testParse :: ByteString -> Program L.Range
 testParse = fromRight' . runParser
 
@@ -415,7 +457,7 @@ testShouldFail :: ByteString -> Bool
 testShouldFail = isLeft . runParser
 
 t1 :: ByteString
-t1 = [tigerSrc| let in 5 end |]
+t1 = [tigerSrc| if 1 then if 2 then 3 else 4 |]
 t2 = displayAST . fromRight' $ runParser t1
 
 displayAST :: (Functor f) => f a -> f ()

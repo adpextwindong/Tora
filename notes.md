@@ -32,8 +32,8 @@
   - [ ] Array expression
   - [ ] Array and record assignment expression
   - [ ] Assignment
-  - [ ] If then else
-  - [ ] If then
+  - [x] If then else
+  - [x] If then
   - [ ] While
   - [ ] For loop
 
