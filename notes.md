@@ -15,7 +15,7 @@
   - [x] Nil
   - [x] Let ...vardec.. in e end
   - [x] Array expression
-  - [ ] Record value creation
+  - [x] Record value creation
   - [ ] LValues
     - [ ] identifier
     - [ ] dot operator (lvalue . id)

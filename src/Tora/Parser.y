@@ -9,7 +9,7 @@ module Tora.Parser
   ) where
 
 import Data.ByteString.Lazy.Char8 (ByteString)
-import Data.Maybe (fromJust)
+import Data.Maybe (fromJust, maybeToList)
 import Data.Monoid (First (..))
 import Test.HUnit
 import Data.Either
@@ -136,6 +136,14 @@ expr :: { Expr L.Range }
      | name '(' ')' { FunCallExpr (info $1 <-> L.rtRange $3) $1 [] }
      | name '(' expr  many(commaExpr) ')' { FunCallExpr (info $1 <-> L.rtRange $5) $1 ($3 : $4) }
      | typeid '[' expr ']' of expr { ArrayInitExpr (info $1 <-> info $6) $1 $3 $6 }
+     | typeid '{' '}' { RecordInitExpr (info $1 <-> L.rtRange $3) $1 [] }
+     | typeid '{' typeFieldInit many(commaTypeFieldInit) '}' { RecordInitExpr (info $1 <-> L.rtRange $5) $1 ($3 : $4) }
+
+commaTypeFieldInit :: { (Name L.Range, Expr L.Range) }
+                   : ',' name '=' expr { ($2, $4) }
+
+typeFieldInit :: { (Name L.Range, Expr L.Range) }
+              : name '=' expr { ($1,$3) }
 
 commaExpr :: { Expr L.Range }
 commaExpr : ',' expr { $2 }
@@ -201,6 +209,7 @@ data Expr a
   | BreakExpr a
   | FunCallExpr a (Name a) [Expr a]
   | ArrayInitExpr a (Name a) (Expr a) (Expr a)
+  | RecordInitExpr a (Name a) [(Name a, Expr a)]
   deriving (Functor, Foldable, Show)
 
 data Program a
@@ -264,7 +273,8 @@ testParser = TestList
   ,testForLoop
   ,testBreakExpr
   ,testFunCallExpr
-  ,testArrayInitExpr ]
+  ,testArrayInitExpr
+  ,testRecordInitExpr]
 
 testTypeId :: Test
 testTypeId = TestCase $ do
@@ -557,6 +567,43 @@ testArrayInitExpr = TestCase $ do
         _ -> False
 
   assertBool "Array init expr multi test" $ test output
+
+testRecordInitExpr
+  = TestList
+  [testRecordInitEmpty
+  ,testRecordInitSingleTyField
+  ,testRecordInitMultiTyField]
+
+testRecordInitEmpty = TestCase $ do
+  let input = [tigerSrc| foo { } |]
+  let output = testParse input
+
+  let test = \case
+        (ProgExpr _ (RecordInitExpr _ (Name _ "foo") [])) -> True
+        _ -> False
+
+  assertBool "Record init empty test" $ test output
+
+testRecordInitSingleTyField = TestCase $ do
+  let input = [tigerSrc| foo {baz = 3} |]
+  let output = testParse input
+
+  let test = \case
+        (ProgExpr _ (RecordInitExpr _ (Name _ "foo") [(Name _ "baz", IntLitExpr _ 3)])) -> True
+        _ -> False
+
+  assertBool "Record init single field" $ test output
+
+testRecordInitMultiTyField = TestCase $ do
+  let input = [tigerSrc| foo {baz = 3, quux = 5} |]
+  let output = testParse input
+
+  let test = \case
+        (ProgExpr _ (RecordInitExpr _ (Name _ "foo") [(Name _ "baz", IntLitExpr _ 3)
+                                                     ,(Name _ "quux", IntLitExpr _ 5)])) -> True
+        _ -> False
+
+  assertBool "Record init multi field" $ test output
 
 testParse :: ByteString -> Program L.Range
 testParse = fromRight' . runParser
