@@ -35,7 +35,8 @@
   - [x] If then else
   - [x] If then
   - [x] While
-  - [ ] For loop
+  - [x] For loop
+  - [x] break
 
 - [ ] Precedence of operators
 - [ ] Associativity

@@ -46,6 +46,7 @@ import Tora.QQ
   break             { L.RangedToken (L.TBreak) _ }
   dot               { L.RangedToken (L.TDot) _ }
   do                { L.RangedToken (L.TDo) _ }
+  to                { L.RangedToken (L.TTo) _ }
   integerLiteral    { L.RangedToken (L.TIntegerLit _) _ }
   floatLiteral      { L.RangedToken (L.TFloatLit _) _ }
   stringLiteral     { L.RangedToken (L.TStringLit _) _ }
@@ -130,6 +131,8 @@ expr :: { Expr L.Range }
      | if expr then expr %shift { IFThenExpr (L.rtRange $1 <-> info $4) $2 $4 }
      | if expr then expr else expr { IFThenElseExpr (L.rtRange $1 <-> info $6) $2 $4 $6 }
      | while expr do expr { WhileExpr (L.rtRange $1 <-> info $4) $2 $4 }
+     | for name varDecEquals expr to expr do expr { ForExpr (L.rtRange $1 <-> info $8) $2 $4 $6 $8 }
+     | break { BreakExpr (L.rtRange $1) }
 
 elseExpr :: { Expr L.Range }
          : else expr { $2 }
@@ -185,6 +188,8 @@ data Expr a
   | IFThenExpr a (Expr a) (Expr a)
   | IFThenElseExpr a (Expr a) (Expr a) (Expr a)
   | WhileExpr a (Expr a) (Expr a)
+  | ForExpr a (Name a) (Expr a) (Expr a) (Expr a)
+  | BreakExpr a
   deriving (Functor, Foldable, Show)
 
 data Program a
@@ -244,7 +249,9 @@ testParser = TestList
   ,testLetExpr
   ,testIfThenElseExpr
   ,testStringLiteral
-  ,testWhileLoop ]
+  ,testWhileLoop
+  ,testForLoop
+  ,testBreakExpr ]
 
 testTypeId :: Test
 testTypeId = TestCase $ do
@@ -472,6 +479,25 @@ testWhileLoop = TestCase $ do
 
   assertBool "While loop test" $ test output
 
+testForLoop = TestCase $ do
+  let input = [tigerSrc| for foo := 5 to 6 do 1 |]
+  let output = testParse input
+
+  let test = \case
+        (ProgExpr _ (ForExpr _ (Name _ "foo") (IntLitExpr _ 5) (IntLitExpr _ 6) (IntLitExpr _ 1))) -> True
+        _ -> False
+
+  assertBool "For loop test" $ test output
+
+testBreakExpr = TestCase $ do
+  let input = [tigerSrc| break |]
+  let output = testParse input
+
+  let test = \case
+        (ProgExpr _ (BreakExpr _)) -> True
+        _ -> False
+
+  assertBool "Break expr test" $ test output
 
 testParse :: ByteString -> Program L.Range
 testParse = fromRight' . runParser
@@ -480,7 +506,7 @@ testShouldFail :: ByteString -> Bool
 testShouldFail = isLeft . runParser
 
 t1 :: ByteString
-t1 = [tigerSrc| while 1 do 2 |]
+t1 = [tigerSrc| for foo := 5 to 6 do 1 |]
 t2 = displayAST . fromRight' $ runParser t1
 
 displayAST :: (Functor f) => f a -> f ()

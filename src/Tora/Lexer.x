@@ -86,6 +86,7 @@ tokens :-
   <0> "do"        { tok TDo }
   <0> "for"       { tok TFor }
   <0> "break"     { tok TBreak }
+  <0> "to"        { tok TTo }
 
   <0> $alpha $alphanumeric*   { tokId }
   --TODO String Literal
@@ -114,6 +115,7 @@ data Token
   | TBreak
   | TDot
   | TDo
+  | TTo
 
   -- Literals
   | TIntegerLit Int
@@ -328,8 +330,8 @@ testBracesAndParens = TestCase $ do
 
 testKeywords :: Test
 testKeywords = TestCase $ do
-  let expected = [TType, TArrayOf, TOf, TFun, TVar, TVarDecEquals, TIf, TThen, TElse, TLet, TIn, TEnd, TNil, TWhile, TDo, TFor, TBreak, TEOF]
-  let input = "type array of of function var := if then else let in end nil while do for break"
+  let expected = [TType, TArrayOf, TOf, TFun, TVar, TVarDecEquals, TIf, TThen, TElse, TLet, TIn, TEnd, TNil, TWhile, TDo, TFor, TBreak, TTo, TEOF]
+  let input = "type array of of function var := if then else let in end nil while do for break to"
   let output = fmap rtToken . fromRight' $ scanMany input
   assertEqual "Lexing keywords" expected output
 
