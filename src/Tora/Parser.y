@@ -135,6 +135,7 @@ expr :: { Expr L.Range }
      | break { BreakExpr (L.rtRange $1) }
      | name '(' ')' { FunCallExpr (info $1 <-> L.rtRange $3) $1 [] }
      | name '(' expr  many(commaExpr) ')' { FunCallExpr (info $1 <-> L.rtRange $5) $1 ($3 : $4) }
+     --TODO introduce typeid newtype around name.
      | typeid '[' expr ']' of expr { ArrayInitExpr (info $1 <-> info $6) $1 $3 $6 }
      | typeid '{' '}' { RecordInitExpr (info $1 <-> L.rtRange $3) $1 [] }
      | typeid '{' typeFieldInit many(commaTypeFieldInit) '}' { RecordInitExpr (info $1 <-> L.rtRange $5) $1 ($3 : $4) }
