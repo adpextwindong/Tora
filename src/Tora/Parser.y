@@ -133,6 +133,11 @@ expr :: { Expr L.Range }
      | while expr do expr { WhileExpr (L.rtRange $1 <-> info $4) $2 $4 }
      | for name varDecEquals expr to expr do expr { ForExpr (L.rtRange $1 <-> info $8) $2 $4 $6 $8 }
      | break { BreakExpr (L.rtRange $1) }
+     | name '(' ')' { FunCallExpr (info $1 <-> L.rtRange $3) $1 [] }
+     | name '(' expr  many(commaExpr) ')' { FunCallExpr (info $1 <-> L.rtRange $5) $1 ($3 : $4) }
+
+commaExpr :: { Expr L.Range }
+commaExpr : ',' expr { $2 }
 
 elseExpr :: { Expr L.Range }
          : else expr { $2 }
@@ -190,6 +195,7 @@ data Expr a
   | WhileExpr a (Expr a) (Expr a)
   | ForExpr a (Name a) (Expr a) (Expr a) (Expr a)
   | BreakExpr a
+  | FunCallExpr a (Name a) [Expr a]
   deriving (Functor, Foldable, Show)
 
 data Program a
@@ -251,7 +257,8 @@ testParser = TestList
   ,testStringLiteral
   ,testWhileLoop
   ,testForLoop
-  ,testBreakExpr ]
+  ,testBreakExpr
+  ,testFunCallExpr ]
 
 testTypeId :: Test
 testTypeId = TestCase $ do
@@ -498,6 +505,45 @@ testBreakExpr = TestCase $ do
         _ -> False
 
   assertBool "Break expr test" $ test output
+
+testFunCallExpr
+  = TestList
+  [testFunCallExprMultiArgs
+  ,testFunCallExprNoArgs
+  ,testFunCallExprSingleArg ]
+
+testFunCallExprMultiArgs = TestCase $ do
+  let input = [tigerSrc| foo(1,2) |]
+  let output = testParse input
+
+  let test = \case
+        (ProgExpr _ (FunCallExpr _ (Name _ "foo") [IntLitExpr _ 1, IntLitExpr _ 2])) -> True
+        _ -> False
+
+  assertBool "FunCall multi arg test" $ test output
+
+testFunCallExprNoArgs = TestCase $ do
+  let input = [tigerSrc| foo() |]
+  let output = testParse input
+
+  let test = \case
+        (ProgExpr _ (FunCallExpr _ (Name _ "foo") [])) -> True
+        _ -> False
+
+  assertBool "FunCall no arg test" $ test output
+
+testFunCallExprSingleArg = TestCase $ do
+  let input = [tigerSrc| foo(1) |]
+  let output = testParse input
+
+  let test = \case
+        (ProgExpr _ (FunCallExpr _ (Name _ "foo") [IntLitExpr _ 1])) -> True
+        _ -> False
+
+  assertBool "FunCall no arg test" $ test output
+
+
+
 
 testParse :: ByteString -> Program L.Range
 testParse = fromRight' . runParser

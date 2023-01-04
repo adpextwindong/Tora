@@ -27,7 +27,7 @@
   - [ ] Comparrison
   - [ ] String comparison
   - [ ] Boolean operators
-  - [ ] Function Call
+  - [x] Function Call
   - [ ] Record value creation
   - [ ] Array expression
   - [ ] Array and record assignment expression
