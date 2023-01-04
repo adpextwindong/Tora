@@ -20,7 +20,7 @@
     - [ ] lvalue array access
   - [ ] The No Value () expression (not unit??)
   - [x] Integer Literal
-  - [ ] String Literal
+  - [x] String Literal
   - [x] Expression Sequences where last returns
   - [ ] Negation
   - [ ] Arithmetic
@@ -34,7 +34,7 @@
   - [ ] Assignment
   - [x] If then else
   - [x] If then
-  - [ ] While
+  - [x] While
   - [ ] For loop
 
 - [ ] Precedence of operators

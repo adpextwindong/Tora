@@ -92,7 +92,6 @@ program :: { Program L.Range }
         : expr { ProgExpr (info $1) $1 }
         | declarations { ProgDecls (listInfo $1) $1 }
 
---TODO test declarations
 declarations :: { [Declaration L.Range] }
              : many(declaration) { $1 }
 
@@ -130,6 +129,7 @@ expr :: { Expr L.Range }
      | let declarations in exprs end { LetExpr (L.rtRange $1 <-> info $4) $2 $4 }
      | if expr then expr %shift { IFThenExpr (L.rtRange $1 <-> info $4) $2 $4 }
      | if expr then expr else expr { IFThenElseExpr (L.rtRange $1 <-> info $6) $2 $4 $6 }
+     | while expr do expr { WhileExpr (L.rtRange $1 <-> info $4) $2 $4 }
 
 elseExpr :: { Expr L.Range }
          : else expr { $2 }
@@ -184,7 +184,7 @@ data Expr a
   | LetExpr a [Declaration a] (Expr a) -- | Uses an ExprSeq
   | IFThenExpr a (Expr a) (Expr a)
   | IFThenElseExpr a (Expr a) (Expr a) (Expr a)
-  -- | IFEExpr a (Expr a) (Expr a) (Maybe (Expr a)) -- TODO remove shift conflict
+  | WhileExpr a (Expr a) (Expr a)
   deriving (Functor, Foldable, Show)
 
 data Program a
@@ -243,7 +243,8 @@ testParser = TestList
   ,testExprSeqAndParens
   ,testLetExpr
   ,testIfThenElseExpr
-  ,testStringLiteral ]
+  ,testStringLiteral
+  ,testWhileLoop ]
 
 testTypeId :: Test
 testTypeId = TestCase $ do
@@ -461,6 +462,17 @@ testStringLiteral = TestCase $ do
 
   assertBool "String literal test" $ test output
 
+testWhileLoop = TestCase $ do
+  let input = [tigerSrc| while 1 do 2 |]
+  let output = testParse input
+
+  let test = \case
+        (ProgExpr _ (WhileExpr _ (IntLitExpr _ 1) (IntLitExpr _ 2))) -> True
+        _ -> False
+
+  assertBool "While loop test" $ test output
+
+
 testParse :: ByteString -> Program L.Range
 testParse = fromRight' . runParser
 
@@ -468,7 +480,7 @@ testShouldFail :: ByteString -> Bool
 testShouldFail = isLeft . runParser
 
 t1 :: ByteString
-t1 = [tigerSrc| if 1 then if 2 then 3 else 4 |]
+t1 = [tigerSrc| while 1 do 2 |]
 t2 = displayAST . fromRight' $ runParser t1
 
 displayAST :: (Functor f) => f a -> f ()
