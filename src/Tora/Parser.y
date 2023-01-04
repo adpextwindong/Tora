@@ -135,6 +135,7 @@ expr :: { Expr L.Range }
      | break { BreakExpr (L.rtRange $1) }
      | name '(' ')' { FunCallExpr (info $1 <-> L.rtRange $3) $1 [] }
      | name '(' expr  many(commaExpr) ')' { FunCallExpr (info $1 <-> L.rtRange $5) $1 ($3 : $4) }
+     | typeid '[' expr ']' of expr { ArrayInitExpr (info $1 <-> info $6) $1 $3 $6 }
 
 commaExpr :: { Expr L.Range }
 commaExpr : ',' expr { $2 }
@@ -146,6 +147,9 @@ ty :: { Type L.Range }
    : name { TVar (info $1) $1 }
    | '{' optional(tyFields) '}' { TRecord (L.rtRange $1 <-> L.rtRange $3) (concat $2) }
    | arrayOf ty                 { TArray (L.rtRange $1 <-> info $2) $2 }
+
+typeid :: { Name L.Range }
+       : name { $1 }
 
 name :: { Name L.Range }
      : identifier { unTok $1 (\range (L.TIdentifier name) -> Name range name) }
@@ -196,6 +200,7 @@ data Expr a
   | ForExpr a (Name a) (Expr a) (Expr a) (Expr a)
   | BreakExpr a
   | FunCallExpr a (Name a) [Expr a]
+  | ArrayInitExpr a (Name a) (Expr a) (Expr a)
   deriving (Functor, Foldable, Show)
 
 data Program a
@@ -258,7 +263,8 @@ testParser = TestList
   ,testWhileLoop
   ,testForLoop
   ,testBreakExpr
-  ,testFunCallExpr ]
+  ,testFunCallExpr
+  ,testArrayInitExpr ]
 
 testTypeId :: Test
 testTypeId = TestCase $ do
@@ -542,8 +548,15 @@ testFunCallExprSingleArg = TestCase $ do
 
   assertBool "FunCall no arg test" $ test output
 
+testArrayInitExpr = TestCase $ do
+  let input = [tigerSrc| foo[2] of 1 |]
+  let output = testParse input
 
+  let test = \case
+        (ProgExpr _ (ArrayInitExpr _ (Name _ "foo") (IntLitExpr _ 2) (IntLitExpr _ 1))) -> True
+        _ -> False
 
+  assertBool "Array init expr multi test" $ test output
 
 testParse :: ByteString -> Program L.Range
 testParse = fromRight' . runParser
@@ -552,7 +565,7 @@ testShouldFail :: ByteString -> Bool
 testShouldFail = isLeft . runParser
 
 t1 :: ByteString
-t1 = [tigerSrc| for foo := 5 to 6 do 1 |]
+t1 = [tigerSrc| foo[2] of 1 |]
 t2 = displayAST . fromRight' $ runParser t1
 
 displayAST :: (Functor f) => f a -> f ()

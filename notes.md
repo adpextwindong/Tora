@@ -14,10 +14,14 @@
   - [x] Parens
   - [x] Nil
   - [x] Let ...vardec.. in e end
+  - [x] Array expression
+  - [ ] Record value creation
   - [ ] LValues
     - [ ] identifier
     - [ ] dot operator (lvalue . id)
     - [ ] lvalue array access
+    - [ ] Array and record assignment expression
+    - [ ] Assignment
   - [ ] The No Value () expression (not unit??)
   - [x] Integer Literal
   - [x] String Literal
@@ -28,10 +32,6 @@
   - [ ] String comparison
   - [ ] Boolean operators
   - [x] Function Call
-  - [ ] Record value creation
-  - [ ] Array expression
-  - [ ] Array and record assignment expression
-  - [ ] Assignment
   - [x] If then else
   - [x] If then
   - [x] While
