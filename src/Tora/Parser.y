@@ -69,11 +69,15 @@ import Tora.QQ
   lessThan          { L.RangedToken (L.TLT) _ }
   greaterThanEqual  { L.RangedToken (L.TGTE) _ }
   lessThanEqual     { L.RangedToken (L.TLTE) _ }
-  booleanAnd        { L.RangedToken (L.TBAnd) _ }
-  booleanOr         { L.RangedToken (L.TBor) _ }
+  '&'               { L.RangedToken (L.TBAnd) _ }
+  '|'               { L.RangedToken (L.TBor) _ }
   endOfFile         { L.RangedToken (L.TEOF) _ }
 
+%right '&'
+%right '|'
+
 %%
+
 
 -- UTILS
 optional(p)
@@ -130,17 +134,19 @@ expr :: { Expr L.Range }
      | let declarations in end { LetExpr (L.rtRange $1 <-> L.rtRange $4) $2 (NoValueExpr (L.rtRange $3 <-> L.rtRange $4)) }
      | let declarations in exprs end { LetExpr (L.rtRange $1 <-> info $4) $2 $4 }
      | if expr then expr %shift { IFThenExpr (L.rtRange $1 <-> info $4) $2 $4 }
-     | if expr then expr else expr { IFThenElseExpr (L.rtRange $1 <-> info $6) $2 $4 $6 }
-     | while expr do expr { WhileExpr (L.rtRange $1 <-> info $4) $2 $4 }
-     | for name varDecEquals expr to expr do expr { ForExpr (L.rtRange $1 <-> info $8) $2 $4 $6 $8 }
+     | if expr then expr else expr %shift { IFThenElseExpr (L.rtRange $1 <-> info $6) $2 $4 $6 }
+     | while expr do expr %shift { WhileExpr (L.rtRange $1 <-> info $4) $2 $4 }
+     | for name varDecEquals expr to expr do expr %shift { ForExpr (L.rtRange $1 <-> info $8) $2 $4 $6 $8 }
      | break { BreakExpr (L.rtRange $1) }
      | name '(' ')' { FunCallExpr (info $1 <-> L.rtRange $3) $1 [] }
      | name '(' expr  many(commaExpr) ')' { FunCallExpr (info $1 <-> L.rtRange $5) $1 ($3 : $4) }
      --TODO introduce typeid newtype around name.
-     | typeid '[' expr ']' of expr { ArrayInitExpr (info $1 <-> info $6) $1 $3 $6 }
+     | typeid '[' expr ']' of expr %shift { ArrayInitExpr (info $1 <-> info $6) $1 $3 $6 }
      | typeid '{' '}' { RecordInitExpr (info $1 <-> L.rtRange $3) $1 [] }
      | typeid '{' typeFieldInit many(commaTypeFieldInit) '}' { RecordInitExpr (info $1 <-> L.rtRange $5) $1 ($3 : $4) }
      | '(' ')' { NoValueExpr (L.rtRange $1 <-> L.rtRange $2) }
+     | expr '&' expr { BinOpExpr (info $1 <-> info $3) $1 (BoolAndOp $ L.rtRange $2) $3 }
+     | expr '|' expr { BinOpExpr (info $1 <-> info $3) $1 (BoolOrOp $ L.rtRange $2) $3 }
 
 commaTypeFieldInit :: { (Name L.Range, Expr L.Range) }
                    : ',' name '=' expr { ($2, $4) }
@@ -214,6 +220,12 @@ data Expr a
   | ArrayInitExpr a (Name a) (Expr a) (Expr a)
   | RecordInitExpr a (Name a) [(Name a, Expr a)]
   | NoValueExpr a
+  | BinOpExpr a (Expr a) (Operator a) (Expr a)
+  deriving (Functor, Foldable, Show)
+
+data Operator a
+  = BoolAndOp a
+  | BoolOrOp a
   deriving (Functor, Foldable, Show)
 
 data Program a
@@ -279,7 +291,8 @@ testParser = TestList
   ,testFunCallExpr
   ,testArrayInitExpr
   ,testRecordInitExpr
-  ,testNoValueExprs]
+  ,testNoValueExprs
+  ,testBooleanOperators]
 
 testTypeId :: Test
 testTypeId = TestCase $ do
@@ -631,6 +644,33 @@ testNoValueLetExpr = TestCase $ do
 
   assertBool "NoValue LetExpr Test" $ test output
 
+testBooleanOperators
+  = TestList
+  [testBoolAndOp
+  ,testBoolOrOp]
+
+--TODO more complicated unit tests for conditional expressions and bool ops
+testBoolAndOp = TestCase $ do
+  let input = [tigerSrc| 5 & 0 |]
+  let output = testParse input
+
+  let test = \case
+        (ProgExpr _ (BinOpExpr _ (IntLitExpr _ 5) (BoolAndOp _) (IntLitExpr _ 0))) -> True
+        _ -> False
+
+  assertBool "And Boolean Operator Test" $ test output
+
+testBoolOrOp = TestCase $ do
+  let input = [tigerSrc| 5 | 0 |]
+  let output = testParse input
+
+  let test = \case
+        (ProgExpr _ (BinOpExpr _ (IntLitExpr _ 5) (BoolOrOp _) (IntLitExpr _ 0))) -> True
+        _ -> False
+
+  assertBool "And Boolean Operator Test" $ test output
+
+
 testParse :: ByteString -> Program L.Range
 testParse = fromRight' . runParser
 
@@ -638,7 +678,7 @@ testShouldFail :: ByteString -> Bool
 testShouldFail = isLeft . runParser
 
 t1 :: ByteString
-t1 = [tigerSrc| let var foo := 5 var bar := nil in 6; 7 end |]
+t1 = [tigerSrc| 5 | 0 | 1 |]
 t2 = displayAST . fromRight' $ runParser t1
 
 displayAST :: (Functor f) => f a -> f ()

@@ -11,38 +11,37 @@
   - [x] Function Declaration
 
 - [ ] Expressions
+  - [x] Program AST decls and exprs
   - [x] Parens
   - [x] Nil
   - [x] Let ...vardec.. in e end
   - [x] Array expression
   - [x] Record value creation
-  - [ ] LValues
-    - [ ] identifier
-    - [ ] dot operator (lvalue . id)
-    - [ ] lvalue array access
-    - [ ] Array and record assignment expression
-    - [ ] Assignment
   - [x] The No Value () expression
     - [x] Unit No Value
     - [x] Empty let expr body
   - [x] Integer Literal
   - [x] String Literal
   - [x] Expression Sequences where last returns
-  - [ ] Negation
-  - [ ] Arithmetic
-  - [ ] Comparrison
-  - [ ] String comparison
-  - [ ] Boolean operators
   - [x] Function Call
   - [x] If then else
   - [x] If then
   - [x] While
   - [x] For loop
   - [x] break
-
-- [ ] Precedence of operators
-- [ ] Associativity
-- [x] Program AST decls and exprs
+  - [ ] Negation
+  - [ ] Arithmetic
+  - [ ] Comparrison
+  - [ ] String comparison
+  - [x] Boolean operators
+  - [ ] Precedence of operators
+  - [ ] Associativity
+  - [ ] LValues
+    - [ ] identifier
+    - [ ] dot operator (lvalue . id)
+    - [ ] lvalue array access
+    - [ ] Array and record assignment expression
+    - [ ] Assignment
 
 ## Semantic Analysis
 
