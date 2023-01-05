@@ -127,6 +127,7 @@ expr :: { Expr L.Range }
      | nil { NilExpr (L.rtRange $1) }
      | integerLiteral { unTok $1 (\range (L.TIntegerLit v) -> IntLitExpr (L.rtRange $1) v) }
      | stringLiteral { unTok $1 (\range (L.TStringLit v) -> StringLitExpr (L.rtRange $1) v) }
+     | let declarations in end { LetExpr (L.rtRange $1 <-> L.rtRange $4) $2 (NoValueExpr (L.rtRange $3 <-> L.rtRange $4)) }
      | let declarations in exprs end { LetExpr (L.rtRange $1 <-> info $4) $2 $4 }
      | if expr then expr %shift { IFThenExpr (L.rtRange $1 <-> info $4) $2 $4 }
      | if expr then expr else expr { IFThenElseExpr (L.rtRange $1 <-> info $6) $2 $4 $6 }
@@ -139,6 +140,7 @@ expr :: { Expr L.Range }
      | typeid '[' expr ']' of expr { ArrayInitExpr (info $1 <-> info $6) $1 $3 $6 }
      | typeid '{' '}' { RecordInitExpr (info $1 <-> L.rtRange $3) $1 [] }
      | typeid '{' typeFieldInit many(commaTypeFieldInit) '}' { RecordInitExpr (info $1 <-> L.rtRange $5) $1 ($3 : $4) }
+     | '(' ')' { NoValueExpr (L.rtRange $1 <-> L.rtRange $2) }
 
 commaTypeFieldInit :: { (Name L.Range, Expr L.Range) }
                    : ',' name '=' expr { ($2, $4) }
@@ -211,6 +213,7 @@ data Expr a
   | FunCallExpr a (Name a) [Expr a]
   | ArrayInitExpr a (Name a) (Expr a) (Expr a)
   | RecordInitExpr a (Name a) [(Name a, Expr a)]
+  | NoValueExpr a
   deriving (Functor, Foldable, Show)
 
 data Program a
@@ -275,7 +278,8 @@ testParser = TestList
   ,testBreakExpr
   ,testFunCallExpr
   ,testArrayInitExpr
-  ,testRecordInitExpr]
+  ,testRecordInitExpr
+  ,testNoValueExprs]
 
 testTypeId :: Test
 testTypeId = TestCase $ do
@@ -426,7 +430,6 @@ testExprSeqAndParens = TestCase $ do
 testLetExpr
   = TestList
   [testLetExprMulti
-  ,testLetExprEmptyShouldFail
   ,testLetEmptyDecs]
 
 testLetExprMulti = TestCase $ do
@@ -435,12 +438,9 @@ testLetExprMulti = TestCase $ do
 
   let test = \case
         (ProgExpr _ (LetExpr _ [VarDeclaration _ (Name _ "foo") Nothing (IntLitExpr _ 5),VarDeclaration _ (Name _ "bar") Nothing (NilExpr _)] (ExprSeq _ [IntLitExpr _ 6,IntLitExpr _ 7]))) -> True
+        _ -> False
 
   assertBool "LetExprMulti Test" $ test output
-
-testLetExprEmptyShouldFail = TestCase $ do
-  let input = [tigerSrc| let in end |]
-  assertBool "LetExprMulti Test" $ testShouldFail input
 
 testLetEmptyDecs = TestCase $ do
   let input = [tigerSrc| let in 5 end |]
@@ -606,6 +606,31 @@ testRecordInitMultiTyField = TestCase $ do
 
   assertBool "Record init multi field" $ test output
 
+testNoValueExprs
+  = TestList
+  [testNoValueUnit
+  ,testNoValueLetExpr]
+
+testNoValueUnit = TestCase $ do
+  let input = [tigerSrc| () |]
+  let output = testParse input
+
+  let test = \case
+        (ProgExpr _ (NoValueExpr _)) -> True
+        _ -> False
+
+  assertBool "Unit No Value Test" $ test output
+
+testNoValueLetExpr = TestCase $ do
+  let input = [tigerSrc| let in end |]
+  let output = testParse input
+
+  let test = \case
+        (ProgExpr _ (LetExpr _ [] (NoValueExpr _))) -> True
+        _ -> False
+
+  assertBool "NoValue LetExpr Test" $ test output
+
 testParse :: ByteString -> Program L.Range
 testParse = fromRight' . runParser
 
@@ -613,7 +638,7 @@ testShouldFail :: ByteString -> Bool
 testShouldFail = isLeft . runParser
 
 t1 :: ByteString
-t1 = [tigerSrc| foo[2] of 1 |]
+t1 = [tigerSrc| let var foo := 5 var bar := nil in 6; 7 end |]
 t2 = displayAST . fromRight' $ runParser t1
 
 displayAST :: (Functor f) => f a -> f ()
