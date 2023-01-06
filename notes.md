@@ -30,9 +30,8 @@
   - [x] For loop
   - [x] break
   - [ ] Negation
-  - [ ] Arithmetic
+  - [x] Arithmetic
   - [ ] Comparrison
-  - [ ] String comparison
   - [x] Boolean operators
   - [ ] Precedence of operators
   - [ ] Associativity
