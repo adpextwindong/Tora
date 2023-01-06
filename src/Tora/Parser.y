@@ -158,7 +158,8 @@ expr :: { Expr L.Range }
      | typeid '{' '}' { RecordInitExpr (info $1 <-> L.rtRange $3) $1 [] }
      | typeid '{' typeFieldInit many(commaTypeFieldInit) '}' { RecordInitExpr (info $1 <-> L.rtRange $5) $1 ($3 : $4) }
      | '(' ')' { NoValueExpr (L.rtRange $1 <-> L.rtRange $2) }
-     -- TODO unary negation
+     | '-' expr      { UnaryNegate (L.rtRange $1 <-> info $2) $2 }
+
      | expr '*' expr { BinOpExpr (info $1 <-> info $3) $1 (MulOp $ L.rtRange $2) $3 }
      | expr '/' expr { BinOpExpr (info $1 <-> info $3) $1 (DivOp $ L.rtRange $2) $3 }
      | expr '+' expr { BinOpExpr (info $1 <-> info $3) $1 (PlusOp $ L.rtRange $2) $3 }
@@ -247,6 +248,7 @@ data Expr a
   | RecordInitExpr a (Name a) [(Name a, Expr a)]
   | NoValueExpr a
   | BinOpExpr a (Expr a) (Operator a) (Expr a)
+  | UnaryNegate a (Expr a)
   deriving (Functor, Foldable, Show)
 
 data Operator a
@@ -330,7 +332,8 @@ testParser = TestList
   ,testNoValueExprs
   ,testBooleanOperators
   ,testArithemtic
-  ,testComparison]
+  ,testComparison
+  ,testUnaryNegation]
 
 testTypeId :: Test
 testTypeId = TestCase $ do
@@ -824,6 +827,15 @@ testLTEOp = TestCase $ do
 
   assertBool "Less Than Equal Op Test" $ test output
 
+testUnaryNegation = TestCase $ do
+  let input = [tigerSrc| - 5 + 2 |]
+  let output = testParse input
+
+  let test = \case
+        (ProgExpr _ (BinOpExpr _ (UnaryNegate _ (IntLitExpr _ 5)) (PlusOp _) (IntLitExpr _ 2))) -> True
+        _ -> False
+
+  assertBool "Unary Negate Test" $ test output
 
 testParse :: ByteString -> Program L.Range
 testParse = fromRight' . runParser
@@ -832,7 +844,7 @@ testShouldFail :: ByteString -> Bool
 testShouldFail = isLeft . runParser
 
 t1 :: ByteString
-t1 = [tigerSrc| 5 * 2 |]
+t1 = [tigerSrc| - 5 + 2 |]
 t2 = displayAST . fromRight' $ runParser t1
 
 displayAST :: (Functor f) => f a -> f ()

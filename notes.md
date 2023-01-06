@@ -29,9 +29,9 @@
   - [x] While
   - [x] For loop
   - [x] break
-  - [ ] Negation
+  - [x] Negation
   - [x] Arithmetic
-  - [ ] Comparrison
+  - [x] Comparrison
   - [x] Boolean operators
   - [ ] Precedence of operators
   - [ ] Associativity
