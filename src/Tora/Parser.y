@@ -31,7 +31,7 @@ import Tora.QQ
   type              { L.RangedToken (L.TType) _ }
   arrayOf           { L.RangedToken (L.TArrayOf) _ }
   of                { L.RangedToken (L.TOf) _ }
-  varDecEquals      { L.RangedToken (L.TVarDecEquals) _ }
+  ":="      { L.RangedToken (L.TVarDecEquals) _ }
   var               { L.RangedToken (L.TVar) _ }
   function          { L.RangedToken (L.TFun) _ }
   if                { L.RangedToken (L.TIf) _ }
@@ -122,7 +122,7 @@ typeDeclaration :: { Declaration L.Range }
                 : type name '=' ty { TypeDeclaration (L.rtRange $1 <-> info $4) $2 $4 }
 
 varDeclaration :: { Declaration L.Range }
-               : var name optional(typeAnnotation) varDecEquals expr
+               : var name optional(typeAnnotation) ":=" expr
                   { VarDeclaration (L.rtRange $1 <-> info $5) $2 $3 $5 }
 
 
@@ -150,7 +150,9 @@ expr :: { Expr L.Range }
      | if expr then expr else expr %shift { IFThenElseExpr (L.rtRange $1 <-> info $6) $2 $4 $6 }
      | while expr do expr %shift { WhileExpr (L.rtRange $1 <-> info $4) $2 $4 }
      | lvalue { LValueExpr (info $1) $1 }
-     | for name varDecEquals expr to expr do expr %shift { ForExpr (L.rtRange $1 <-> info $8) $2 $4 $6 $8 }
+  -- TODO fix shift/reduces
+  --  | lvalue ":=" expr { AssignmentExpr (info $1 <-> info $3) $1 $3 }
+     | for name ":=" expr to expr do expr %shift { ForExpr (L.rtRange $1 <-> info $8) $2 $4 $6 $8 }
      | break { BreakExpr (L.rtRange $1) }
      | name '(' ')' { FunCallExpr (info $1 <-> L.rtRange $3) $1 [] }
      | name '(' expr  many(commaExpr) ')' { FunCallExpr (info $1 <-> L.rtRange $5) $1 ($3 : $4) }
@@ -178,6 +180,7 @@ expr :: { Expr L.Range }
 lvalue :: { LValue L.Range }
        : name  { LValueBase (info $1) $1 }
        | lvalue '.' name { LValueDot (info $1 <-> info $3) $1 $3 }
+       -- TODO fix reduce/reduce
        -- | lvalue '[' expr ']' { LValueArray (info $1 <-> L.rtRange $4) $1 $3 }
 
 commaTypeFieldInit :: { (Name L.Range, Expr L.Range) }
@@ -255,12 +258,13 @@ data Expr a
   | BinOpExpr a (Expr a) (Operator a) (Expr a)
   | UnaryNegate a (Expr a)
   | LValueExpr a (LValue a)
+-- | AssignmentExpr a (LValue a) (Expr a) TODO
   deriving (Functor, Foldable, Show)
 
 data LValue a
   = LValueBase a (Name a)
   | LValueDot a (LValue a) (Name a)
---   | LValueArray a (LValue a) (Expr a)
+--   | LValueArray a (LValue a) (Expr a) TODO
   deriving (Functor, Foldable, Show)
 
 data Operator a
@@ -887,6 +891,18 @@ testLValueArray = TestCase $ do
         _ -> False
 
   assertBool "LValue Array Test" $ test output
+-}
+
+{-
+testAssignment = TestCase $ do
+  let input = [tigerSrc| foo := 5 |]
+  let output = testParse input
+
+  let test = \case
+        (ProgExpr _ (AssignmentExpr _ (LValueBase _ (Name _ "foo")) (IntLitExpr _ 5))) -> True
+        _ -> False
+
+  assertBool "Assignment Test" $ test output
 -}
 
 testParse :: ByteString -> Program L.Range
