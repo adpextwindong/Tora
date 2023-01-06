@@ -64,11 +64,11 @@ import Tora.QQ
   '*'               { L.RangedToken (L.TMUL) _ }
   '/'               { L.RangedToken (L.TDIV) _ }
   '='               { L.RangedToken (L.TEQUAL) _ }
-  nequal            { L.RangedToken (L.TNEQUAL) _ }
-  greaterThan       { L.RangedToken (L.TGT) _ }
-  lessThan          { L.RangedToken (L.TLT) _ }
-  greaterThanEqual  { L.RangedToken (L.TGTE) _ }
-  lessThanEqual     { L.RangedToken (L.TLTE) _ }
+  "<>"              { L.RangedToken (L.TNEQUAL) _ }
+  '>'               { L.RangedToken (L.TGT) _ }
+  '<'               { L.RangedToken (L.TLT) _ }
+  ">="              { L.RangedToken (L.TGTE) _ }
+  "<="              { L.RangedToken (L.TLTE) _ }
   '&'               { L.RangedToken (L.TBAnd) _ }
   '|'               { L.RangedToken (L.TBor) _ }
   endOfFile         { L.RangedToken (L.TEOF) _ }
@@ -78,6 +78,13 @@ import Tora.QQ
 %left '/'
 %left '+'
 %left '-'
+
+%nonassoc '='
+%nonassoc "<>"
+%nonassoc '>'
+%nonassoc '<'
+%nonassoc ">="
+%nonassoc "<="
 
 %right '&'
 %right '|'
@@ -156,7 +163,14 @@ expr :: { Expr L.Range }
      | expr '/' expr { BinOpExpr (info $1 <-> info $3) $1 (DivOp $ L.rtRange $2) $3 }
      | expr '+' expr { BinOpExpr (info $1 <-> info $3) $1 (PlusOp $ L.rtRange $2) $3 }
      | expr '-' expr { BinOpExpr (info $1 <-> info $3) $1 (MinusOp $ L.rtRange $2) $3 }
-     -- TODO comparison
+
+     | expr '=' expr { BinOpExpr (info $1 <-> info $3) $1 (EqualOp $ L.rtRange $2) $3 }
+     | expr "<>" expr { BinOpExpr (info $1 <-> info $3) $1 (NEqualOp $ L.rtRange $2) $3 }
+     | expr '>' expr { BinOpExpr (info $1 <-> info $3) $1 (GTOp $ L.rtRange $2) $3 }
+     | expr '<' expr { BinOpExpr (info $1 <-> info $3) $1 (LTOp $ L.rtRange $2) $3 }
+     | expr ">=" expr { BinOpExpr (info $1 <-> info $3) $1 (GTEOp $ L.rtRange $2) $3 }
+     | expr "<=" expr { BinOpExpr (info $1 <-> info $3) $1 (LTEOp $ L.rtRange $2) $3 }
+
      | expr '&' expr { BinOpExpr (info $1 <-> info $3) $1 (BoolAndOp $ L.rtRange $2) $3 }
      | expr '|' expr { BinOpExpr (info $1 <-> info $3) $1 (BoolOrOp $ L.rtRange $2) $3 }
 
@@ -242,7 +256,12 @@ data Operator a
   | DivOp a
   | PlusOp a
   | MinusOp a
-
+  | EqualOp a
+  | NEqualOp a
+  | GTOp a
+  | LTOp a
+  | GTEOp a
+  | LTEOp a
   deriving (Functor, Foldable, Show)
 
 data Program a
@@ -310,7 +329,8 @@ testParser = TestList
   ,testRecordInitExpr
   ,testNoValueExprs
   ,testBooleanOperators
-  ,testArithemtic]
+  ,testArithemtic
+  ,testComparison]
 
 testTypeId :: Test
 testTypeId = TestCase $ do
@@ -734,6 +754,75 @@ testMinusOp = TestCase $ do
         _ -> False
 
   assertBool "Plus Op Test" $ test output
+
+testComparison
+  = TestList
+  [testEqualOp
+  ,testNEqualOp
+  ,testGTOp
+  ,testLTOp
+  ,testGTEOp
+  ,testLTEOp]
+
+testEqualOp = TestCase $ do
+  let input = [tigerSrc| 5 = 4 |]
+  let output = testParse input
+
+  let test = \case
+        (ProgExpr _ (BinOpExpr _ (IntLitExpr _ 5) (EqualOp _) (IntLitExpr _ 4))) -> True
+        _ -> False
+
+  assertBool "Equal Op Test" $ test output
+
+testNEqualOp = TestCase $ do
+  let input = [tigerSrc| 5 <> 4 |]
+  let output = testParse input
+
+  let test = \case
+        (ProgExpr _ (BinOpExpr _ (IntLitExpr _ 5) (NEqualOp _) (IntLitExpr _ 4))) -> True
+        _ -> False
+
+  assertBool "NEqual Op Test" $ test output
+
+testGTOp = TestCase $ do
+  let input = [tigerSrc| 5 > 4 |]
+  let output = testParse input
+
+  let test = \case
+        (ProgExpr _ (BinOpExpr _ (IntLitExpr _ 5) (GTOp _) (IntLitExpr _ 4))) -> True
+        _ -> False
+
+  assertBool "Greater Than Op Test" $ test output
+
+testLTOp = TestCase $ do
+  let input = [tigerSrc| 5 < 4 |]
+  let output = testParse input
+
+  let test = \case
+        (ProgExpr _ (BinOpExpr _ (IntLitExpr _ 5) (LTOp _) (IntLitExpr _ 4))) -> True
+        _ -> False
+
+  assertBool "Less Than Op Test" $ test output
+
+testGTEOp = TestCase $ do
+  let input = [tigerSrc| 5 >= 4 |]
+  let output = testParse input
+
+  let test = \case
+        (ProgExpr _ (BinOpExpr _ (IntLitExpr _ 5) (GTEOp _) (IntLitExpr _ 4))) -> True
+        _ -> False
+
+  assertBool "Greater Than Equal Op Test" $ test output
+
+testLTEOp = TestCase $ do
+  let input = [tigerSrc| 5 <= 4 |]
+  let output = testParse input
+
+  let test = \case
+        (ProgExpr _ (BinOpExpr _ (IntLitExpr _ 5) (LTEOp _) (IntLitExpr _ 4))) -> True
+        _ -> False
+
+  assertBool "Less Than Equal Op Test" $ test output
 
 
 testParse :: ByteString -> Program L.Range
