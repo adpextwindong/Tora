@@ -36,10 +36,9 @@
   - [ ] Precedence of operators
   - [ ] Associativity
   - [ ] LValues
-    - [ ] identifier
-    - [ ] dot operator (lvalue . id)
+    - [x] identifier
+    - [x] dot operator (lvalue . id)
     - [ ] lvalue array access
-    - [ ] Array and record assignment expression
     - [ ] Assignment
 
 ## Semantic Analysis

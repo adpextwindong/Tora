@@ -44,7 +44,7 @@ import Tora.QQ
   while             { L.RangedToken (L.TWhile) _ }
   for               { L.RangedToken (L.TFor) _ }
   break             { L.RangedToken (L.TBreak) _ }
-  dot               { L.RangedToken (L.TDot) _ }
+  '.'               { L.RangedToken (L.TDot) _ }
   do                { L.RangedToken (L.TDo) _ }
   to                { L.RangedToken (L.TTo) _ }
   integerLiteral    { L.RangedToken (L.TIntegerLit _) _ }
@@ -149,6 +149,7 @@ expr :: { Expr L.Range }
      | if expr then expr %shift { IFThenExpr (L.rtRange $1 <-> info $4) $2 $4 }
      | if expr then expr else expr %shift { IFThenElseExpr (L.rtRange $1 <-> info $6) $2 $4 $6 }
      | while expr do expr %shift { WhileExpr (L.rtRange $1 <-> info $4) $2 $4 }
+     | lvalue { LValueExpr (info $1) $1 }
      | for name varDecEquals expr to expr do expr %shift { ForExpr (L.rtRange $1 <-> info $8) $2 $4 $6 $8 }
      | break { BreakExpr (L.rtRange $1) }
      | name '(' ')' { FunCallExpr (info $1 <-> L.rtRange $3) $1 [] }
@@ -171,9 +172,13 @@ expr :: { Expr L.Range }
      | expr '<' expr { BinOpExpr (info $1 <-> info $3) $1 (LTOp $ L.rtRange $2) $3 }
      | expr ">=" expr { BinOpExpr (info $1 <-> info $3) $1 (GTEOp $ L.rtRange $2) $3 }
      | expr "<=" expr { BinOpExpr (info $1 <-> info $3) $1 (LTEOp $ L.rtRange $2) $3 }
-
      | expr '&' expr { BinOpExpr (info $1 <-> info $3) $1 (BoolAndOp $ L.rtRange $2) $3 }
      | expr '|' expr { BinOpExpr (info $1 <-> info $3) $1 (BoolOrOp $ L.rtRange $2) $3 }
+
+lvalue :: { LValue L.Range }
+       : name  { LValueBase (info $1) $1 }
+       | lvalue '.' name { LValueDot (info $1 <-> info $3) $1 $3 }
+       -- | lvalue '[' expr ']' { LValueArray (info $1 <-> L.rtRange $4) $1 $3 }
 
 commaTypeFieldInit :: { (Name L.Range, Expr L.Range) }
                    : ',' name '=' expr { ($2, $4) }
@@ -249,6 +254,13 @@ data Expr a
   | NoValueExpr a
   | BinOpExpr a (Expr a) (Operator a) (Expr a)
   | UnaryNegate a (Expr a)
+  | LValueExpr a (LValue a)
+  deriving (Functor, Foldable, Show)
+
+data LValue a
+  = LValueBase a (Name a)
+  | LValueDot a (LValue a) (Name a)
+--   | LValueArray a (LValue a) (Expr a)
   deriving (Functor, Foldable, Show)
 
 data Operator a
@@ -837,6 +849,46 @@ testUnaryNegation = TestCase $ do
 
   assertBool "Unary Negate Test" $ test output
 
+testLValue
+  = TestList
+  [testLValueSingle
+  ,testLValueDot]
+  --testLValueArray
+
+--TODO assignment
+
+testLValueSingle = TestCase $ do
+  let input = [tigerSrc| foo |]
+  let output = testParse input
+
+  let test = \case
+        (ProgExpr _ (LValueExpr _ (LValueBase _ (Name _ "foo")))) -> True
+        _ -> False
+
+  assertBool "LValue Single Test" $ test output
+
+testLValueDot = TestCase $ do
+  let input = [tigerSrc| foo.bar |]
+  let output = testParse input
+
+  let test = \case
+        (ProgExpr _ (LValueExpr _ (LValueDot _ (LValueBase _ (Name _ "foo")) (Name _ "bar")))) -> True
+        _ -> False
+
+  assertBool "LValue Dot Test" $ test output
+
+{-
+testLValueArray = TestCase $ do
+  let input = [tigerSrc| foo[3] |]
+  let output = testParse input
+
+  let test = \case
+        (ProgExpr _ (LValueExpr _ (LValueArray _ (LValueBase _ (Name _ "foo")) (IntLitExpr _ 3)))) -> True
+        _ -> False
+
+  assertBool "LValue Array Test" $ test output
+-}
+
 testParse :: ByteString -> Program L.Range
 testParse = fromRight' . runParser
 
@@ -844,7 +896,7 @@ testShouldFail :: ByteString -> Bool
 testShouldFail = isLeft . runParser
 
 t1 :: ByteString
-t1 = [tigerSrc| - 5 + 2 |]
+t1 = [tigerSrc| foo[3] |]
 t2 = displayAST . fromRight' $ runParser t1
 
 displayAST :: (Functor f) => f a -> f ()
