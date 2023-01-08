@@ -149,7 +149,6 @@ expr :: { Expr L.Range }
      | if expr then expr %shift { IFThenExpr (L.rtRange $1 <-> info $4) $2 $4 }
      | if expr then expr else expr %shift { IFThenElseExpr (L.rtRange $1 <-> info $6) $2 $4 $6 }
      | while expr do expr %shift { WhileExpr (L.rtRange $1 <-> info $4) $2 $4 }
-     | lvalue { LValueExpr (info $1) $1 }
   -- TODO fix shift/reduces
   --  | lvalue ":=" expr { AssignmentExpr (info $1 <-> info $3) $1 $3 }
      | for name ":=" expr to expr do expr %shift { ForExpr (L.rtRange $1 <-> info $8) $2 $4 $6 $8 }
@@ -157,7 +156,10 @@ expr :: { Expr L.Range }
      | name '(' ')' { FunCallExpr (info $1 <-> L.rtRange $3) $1 [] }
      | name '(' expr  many(commaExpr) ')' { FunCallExpr (info $1 <-> L.rtRange $5) $1 ($3 : $4) }
      --TODO introduce typeid newtype around name.
-     | typeid '[' expr ']' of expr %shift { ArrayInitExpr (info $1 <-> info $6) $1 $3 $6 }
+
+     | name '[' expr ']' of expr %shift { ArrayInitExpr (info $1 <-> info $6) $1 $3 $6 }
+     | lvalue { LValueExpr (info $1) $1 }
+
      | typeid '{' '}' { RecordInitExpr (info $1 <-> L.rtRange $3) $1 [] }
      | typeid '{' typeFieldInit many(commaTypeFieldInit) '}' { RecordInitExpr (info $1 <-> L.rtRange $5) $1 ($3 : $4) }
      | '(' ')' { NoValueExpr (L.rtRange $1 <-> L.rtRange $2) }
@@ -178,10 +180,14 @@ expr :: { Expr L.Range }
      | expr '|' expr { BinOpExpr (info $1 <-> info $3) $1 (BoolOrOp $ L.rtRange $2) $3 }
 
 lvalue :: { LValue L.Range }
-       : name  { LValueBase (info $1) $1 }
-       | lvalue '.' name { LValueDot (info $1 <-> info $3) $1 $3 }
-       -- TODO fix reduce/reduce
-       -- | lvalue '[' expr ']' { LValueArray (info $1 <-> L.rtRange $4) $1 $3 }
+lvalue : name         { LValueBase (info $1) $1 }
+       | lvalueNotId  { $1 }
+
+lvalueNotId :: { LValue L.Range }
+       : lvalue '.' name { LValueDot (info $1 <-> info $3) $1 $3 }
+       | name '[' expr ']' { LValueArray (info $1 <-> L.rtRange $4) (LValueBase (info $1) $1) $3 }
+       | lvalueNotId '[' expr ']' { LValueArray (info $1 <-> L.rtRange $4) $1 $3 }
+
 
 commaTypeFieldInit :: { (Name L.Range, Expr L.Range) }
                    : ',' name '=' expr { ($2, $4) }
@@ -264,7 +270,7 @@ data Expr a
 data LValue a
   = LValueBase a (Name a)
   | LValueDot a (LValue a) (Name a)
---   | LValueArray a (LValue a) (Expr a) TODO
+  | LValueArray a (LValue a) (Expr a)
   deriving (Functor, Foldable, Show)
 
 data Operator a
@@ -881,7 +887,6 @@ testLValueDot = TestCase $ do
 
   assertBool "LValue Dot Test" $ test output
 
-{-
 testLValueArray = TestCase $ do
   let input = [tigerSrc| foo[3] |]
   let output = testParse input
@@ -891,7 +896,6 @@ testLValueArray = TestCase $ do
         _ -> False
 
   assertBool "LValue Array Test" $ test output
--}
 
 {-
 testAssignment = TestCase $ do
