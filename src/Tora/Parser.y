@@ -48,7 +48,6 @@ import Tora.QQ
   do                { L.RangedToken (L.TDo) _ }
   to                { L.RangedToken (L.TTo) _ }
   integerLiteral    { L.RangedToken (L.TIntegerLit _) _ }
-  floatLiteral      { L.RangedToken (L.TFloatLit _) _ }
   stringLiteral     { L.RangedToken (L.TStringLit _) _ }
   '('               { L.RangedToken (L.TParenLeft) _ }
   ')'               { L.RangedToken (L.TParenRight) _ }
@@ -71,8 +70,8 @@ import Tora.QQ
   "<="              { L.RangedToken (L.TLTE) _ }
   '&'               { L.RangedToken (L.TBAnd) _ }
   '|'               { L.RangedToken (L.TBor) _ }
-  endOfFile         { L.RangedToken (L.TEOF) _ }
 
+%left ":="
 --TODO associativity tests
 %left '*'
 %left '/'
@@ -149,8 +148,7 @@ expr :: { Expr L.Range }
      | if expr then expr %shift { IFThenExpr (L.rtRange $1 <-> info $4) $2 $4 }
      | if expr then expr else expr %shift { IFThenElseExpr (L.rtRange $1 <-> info $6) $2 $4 $6 }
      | while expr do expr %shift { WhileExpr (L.rtRange $1 <-> info $4) $2 $4 }
-  -- TODO fix shift/reduces
-  --  | lvalue ":=" expr { AssignmentExpr (info $1 <-> info $3) $1 $3 }
+     | lvalue ":=" expr { AssignmentExpr (info $1 <-> info $3) $1 $3 }
      | for name ":=" expr to expr do expr %shift { ForExpr (L.rtRange $1 <-> info $8) $2 $4 $6 $8 }
      | break { BreakExpr (L.rtRange $1) }
      | name '(' ')' { FunCallExpr (info $1 <-> L.rtRange $3) $1 [] }
@@ -197,9 +195,6 @@ typeFieldInit :: { (Name L.Range, Expr L.Range) }
 
 commaExpr :: { Expr L.Range }
 commaExpr : ',' expr { $2 }
-
-elseExpr :: { Expr L.Range }
-         : else expr { $2 }
 
 ty :: { Type L.Range }
    : name { TVar (info $1) $1 }
@@ -264,7 +259,7 @@ data Expr a
   | BinOpExpr a (Expr a) (Operator a) (Expr a)
   | UnaryNegate a (Expr a)
   | LValueExpr a (LValue a)
--- | AssignmentExpr a (LValue a) (Expr a) TODO
+  | AssignmentExpr a (LValue a) (Expr a)
   deriving (Functor, Foldable, Show)
 
 data LValue a
@@ -355,7 +350,8 @@ testParser = TestList
   ,testBooleanOperators
   ,testArithemtic
   ,testComparison
-  ,testUnaryNegation]
+  ,testUnaryNegation
+  ,testLValue]
 
 testTypeId :: Test
 testTypeId = TestCase $ do
@@ -862,8 +858,9 @@ testUnaryNegation = TestCase $ do
 testLValue
   = TestList
   [testLValueSingle
-  ,testLValueDot]
-  --testLValueArray
+  ,testLValueDot
+  ,testLValueArray
+  ,testAssignment]
 
 --TODO assignment
 
@@ -897,7 +894,6 @@ testLValueArray = TestCase $ do
 
   assertBool "LValue Array Test" $ test output
 
-{-
 testAssignment = TestCase $ do
   let input = [tigerSrc| foo := 5 |]
   let output = testParse input
@@ -907,7 +903,6 @@ testAssignment = TestCase $ do
         _ -> False
 
   assertBool "Assignment Test" $ test output
--}
 
 testParse :: ByteString -> Program L.Range
 testParse = fromRight' . runParser

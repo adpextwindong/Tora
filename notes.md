@@ -33,13 +33,13 @@
   - [x] Arithmetic
   - [x] Comparrison
   - [x] Boolean operators
-  - [ ] Precedence of operators
-  - [ ] Associativity
-  - [ ] LValues
+  - [x] LValues
     - [x] identifier
     - [x] dot operator (lvalue . id)
-    - [ ] lvalue array access
-    - [ ] Assignment
+    - [x] lvalue array access.
+    - [x] Assignment
+  - [ ] Precedence of operators
+  - [ ] Associativity
 
 ## Semantic Analysis
 

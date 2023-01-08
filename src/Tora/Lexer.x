@@ -47,7 +47,6 @@ tokens :-
   <0> "function"  { tok TFun }
 
   <0> $digit+ { tokInteger }
-  <0> $digit+\.$digit+ { tokFloat }
 
   <0> "="   { tok TEQUAL }
   <0> "+"   { tok TPLUS }
@@ -119,7 +118,6 @@ data Token
 
   -- Literals
   | TIntegerLit Int
-  | TFloatLit Float
   | TStringLit BS.ByteString
   --TODO String Literal
 
@@ -251,13 +249,6 @@ tokInteger :: AlexAction RangedToken
 tokInteger inp@(_,_, str, _) len =
   pure RangedToken
     { rtToken = TIntegerLit $ read $ BS.unpack $ BS.take len str
-    , rtRange = mkRange inp len
-    }
-
-tokFloat :: AlexAction RangedToken
-tokFloat inp@(_,_, str, _) len =
-  pure RangedToken
-    { rtToken = TFloatLit $ read $ BS.unpack $ BS.take len str
     , rtRange = mkRange inp len
     }
 
