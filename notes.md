@@ -40,6 +40,10 @@
     - [x] Assignment
   - [ ] Precedence of operators
   - [ ] Associativity
+  - [ ] Page 97. The Tiger language treats _adjacent_ function declarations as (possibly) mutually recursive. The `FunctionDec` constructor of the abstract syntax takes a _list_ of function declarations, not just a single function. The intent is that this list is a maximal consecutive sequence of function declarations. Thus, functions declared by the same `FunctionDec` can be mutually recursive.
+  - [ ] Page 99. The `TypeDec` constructor also takes a list of type declarations.
+  - [ ] Page 99. There is no abstract syntax for `&` and `|` expressions; instead, `e1 & e2` is translated as `if e1 then e2 else 0` and `e1 | e2` is translated as thought it had been written `if e1 then 1 then e2`.
+  - [ ] Page 99. Unary negation `(-i)` should be represented as subtraction (0 - i) in the abstract syntax.
 
 ## Semantic Analysis
 
