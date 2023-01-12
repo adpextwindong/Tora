@@ -225,6 +225,8 @@ data Declaration a
   = TypeDeclaration a (Name a) (Type a)
   | VarDeclaration a (Name a) (Maybe (Type a)) (Expr a)
   | FunDeclaration a (Name a) [TyField a] (Maybe (Type a)) (Expr a)
+  | TypeDecBlock a [(Name a, Type a)]
+  | FunDecBlock a [(Name a, [TyField a], (Maybe (Type a)), Expr a)]
   deriving (Functor, Foldable, Show)
 
 data Name a
@@ -288,6 +290,19 @@ data Program a
   | ProgDecls a [Declaration a]
   deriving (Functor, Foldable, Show)
 
+-- Turns consequtive TypeDecs into a single TypeDec block, same with FunDecs.
+stitchDeclarations :: Program L.Range -> Program L.Range
+stitchDeclarations (ProgExpr r e) = ProgExpr r $ stitchDeclarationsLet e
+stitchDeclarations (ProgDecls r decs) = undefined
+
+stitchDeclarationsLet :: Expr L.Range -> Expr L.Range
+stitchDeclarationsLet = undefined
+
+concatDecs :: [Declaration a] -> [Declaration a]
+concatDecs = undefined
+
+concatDecs' :: Declaration a -> [Declaration a] -> [Declaration a]
+concatDecs' = undefined
 -----------
 -- UTILS --
 -----------
