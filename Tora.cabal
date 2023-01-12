@@ -40,6 +40,7 @@ library
                     ,Tora.Parser.Tests
                     ,Tora.Parser.Tests.Util
                     ,Tora.Parser.Tests.ExprTests
+                    ,Tora.Parser.Tests.DeclarationTests
                     ,Tora.Lexer
                     ,Tora.QQ
                     ,Tora.AST

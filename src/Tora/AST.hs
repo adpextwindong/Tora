@@ -9,9 +9,12 @@ import Data.ByteString.Lazy.Char8 (ByteString)
 ---------
 
 data Declaration a
-  = TypeDeclaration a (Name a) (Type a)
-  | VarDeclaration a (Name a) (Maybe (Type a)) (Expr a)
-  | FunDeclaration a (Name a) [TyField a] (Maybe (Type a)) (Expr a)
+  = VarDeclaration a (Name a) (Maybe (Type a)) (Expr a)
+  | TypeDeclaration a [(Name a,Type a)]
+  | FunDeclaration a [FunDecl a]
+  deriving (Functor, Foldable, Show)
+
+data FunDecl a = FunDecl a (Name a) [TyField a] (Maybe (Type a)) (Expr a)
   deriving (Functor, Foldable, Show)
 
 data Name a

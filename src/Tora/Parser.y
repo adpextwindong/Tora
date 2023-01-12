@@ -10,6 +10,7 @@ module Tora.Parser
 
 import Data.ByteString.Lazy.Char8 (ByteString)
 import Data.Maybe (fromJust, maybeToList)
+import Data.Foldable
 import Data.Monoid (First (..))
 import Data.Either
 import Data.Either.Extra
@@ -110,25 +111,35 @@ program :: { Program L.Range }
         : expr { ProgExpr (info $1) $1 }
         | declarations { ProgDecls (listInfo $1) $1 }
 
+declarationsRev :: { [Declaration L.Range] }
+                : declaration { [$1] }
+                | declarationsRev declaration
+                  { case ($2, $1) of
+                      ((TypeDeclaration tinfo [t]), ((TypeDeclaration tsInfo ts) : ys)) ->
+                          (TypeDeclaration (tinfo <-> tsInfo) (ts ++ [t])) : ys
+                      ((FunDeclaration finfo [f]), ((FunDeclaration fsInfo fs) : ys)) ->
+                          (FunDeclaration (finfo <-> fsInfo) (fs ++ [f])) : ys
+                      (d, ds) -> d : ds
+                    }
+
 declarations :: { [Declaration L.Range] }
-             : many(declaration) { $1 }
+             : declarationsRev { reverse $1 }
 
 declaration :: { Declaration L.Range }
             : typeDeclaration             { $1 }
             | varDeclaration              { $1 }
-            | funDeclaration              { $1 }
+            | funDeclaration              { FunDeclaration (info $1) [$1] }
 
 typeDeclaration :: { Declaration L.Range }
-                : type name '=' ty { TypeDeclaration (L.rtRange $1 <-> info $4) $2 $4 }
+                : type name '=' ty { TypeDeclaration (L.rtRange $1 <-> info $4) [($2, $4)] }
 
 varDeclaration :: { Declaration L.Range }
                : var name optional(typeAnnotation) ":=" expr
                   { VarDeclaration (L.rtRange $1 <-> info $5) $2 $3 $5 }
 
-
-funDeclaration :: { Declaration L.Range }
-               : function name '(' tyFields ')' optional(typeAnnotation) '=' expr
-                  { FunDeclaration (L.rtRange $1 <-> info $8) $2 $4 $6 $8 }
+funDeclaration :: { FunDecl L.Range }
+               : function name '(' optional(tyFields) ')' optional(typeAnnotation) '=' expr
+                  { FunDecl (L.rtRange $1 <-> info $8) $2 (concat $4) $6 $8 }
 
 typeAnnotation :: { Type L.Range }
                : ':' ty { $2 }
