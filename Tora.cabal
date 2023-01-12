@@ -37,8 +37,12 @@ library
     build-tools-depends: alex:alex, happy:happy
     exposed-modules:
                      Tora.Parser
+                    ,Tora.Parser.Tests
+                    ,Tora.Parser.Tests.Util
+                    ,Tora.Parser.Tests.ExprTests
                     ,Tora.Lexer
                     ,Tora.QQ
+                    ,Tora.AST
 
 executable Tora
     main-is:          Main.hs
