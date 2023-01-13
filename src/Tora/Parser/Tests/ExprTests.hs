@@ -8,6 +8,7 @@ import Test.HUnit
 import Tora.QQ
 import Tora.Parser.Tests.Util (stdParserTest)
 import Tora.AST
+import Data.ByteString.Lazy.Char8 (ByteString)
 
 testExpr = TestList
          [testNilExpr]
