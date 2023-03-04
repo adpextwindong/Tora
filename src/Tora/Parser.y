@@ -126,8 +126,8 @@ varDeclaration :: { Declaration L.Range }
 
 
 funDeclaration :: { Declaration L.Range }
-               : function name '(' tyFields ')' optional(typeAnnotation) '=' expr
-                  { FunDeclaration (L.rtRange $1 <-> info $8) $2 $4 $6 $8 }
+               : function name '(' optional(tyFields) ')' optional(typeAnnotation) '=' expr
+                  { FunDeclaration (L.rtRange $1 <-> info $8) $2 (flattenMaybe $4) $6 $8 }
 
 typeAnnotation :: { Type L.Range }
                : ':' ty { $2 }
@@ -304,6 +304,7 @@ listInfo :: Foldable f => [f L.Range] -> L.Range
 listInfo (x:xs) = info x <-> getLast xs
   where getLast (x:[]) = info x
         getLast (x:xs) = getLast xs
+        getLast [] = info x
 
 -- | Performs the union of two ranges by creating a new range starting at the
 -- start position of the first range, and stopping at the stop position of the
@@ -437,9 +438,21 @@ testVarDeclNoAnnotation = TestCase $ do
 
 testFunDecl
   = TestList
-  [ testFunDeclNoAnnotation
+  [ testFunDeclEmpty
+  , testFunDeclNoAnnotation
   , testFunDeclWithAnnotation
   , testFunDeclWithBadAnnotation ]
+
+testFunDeclEmpty = TestCase $ do
+  let input = [tigerSrc| function foo() = 5 |]
+  let output = testParse input
+
+  let test = \case
+        (ProgDecls _ [(FunDeclaration _ (Name _ "foo") [] Nothing
+          (IntLitExpr _ 5))]) -> True
+        _ -> False
+
+  assertBool "funDecl without args" $ test output
 
 testFunDeclNoAnnotation = TestCase $ do
   let input = [tigerSrc| function foo(bar : int) = 5 |]
@@ -917,4 +930,7 @@ t2 = displayAST . fromRight' $ runParser t1
 displayAST :: (Functor f) => f a -> f ()
 displayAST = fmap (const ())
 
+flattenMaybe :: Maybe [a] -> [a]
+flattenMaybe Nothing = []
+flattenMaybe (Just xs) = xs
 }
