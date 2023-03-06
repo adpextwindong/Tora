@@ -6,6 +6,7 @@
 
 module Tora.Parser
   ( parseTiger
+  , testParse
   ) where
 
 import Data.ByteString.Lazy.Char8 (ByteString)
@@ -134,7 +135,10 @@ typeAnnotation :: { Type L.Range }
                : ':' ty { $2 }
 
 exprs :: { Expr L.Range }
-      : expr many(semicolonExpr) { ExprSeq (info $1 <-> listInfo $2) ($1 : $2) }
+      : expr many(semicolonExpr) { case $2 of
+                                     [] -> ExprSeq (info $1) ($1 : $2)
+                                     _ -> ExprSeq (info $1 <-> listInfo $2) ($1 : $2)
+                                     }
 
 semicolonExpr :: { Expr L.Range }
           : ';' expr { $2 }

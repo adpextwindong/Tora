@@ -2,6 +2,7 @@
 module Tora.AST where
 
 import Data.ByteString.Lazy.Char8 (ByteString)
+
 ---------
 -- AST --
 ---------

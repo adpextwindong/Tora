@@ -23,6 +23,15 @@ extra-source-files:
     CHANGELOG.md
     README.md
 
+Test-Suite test
+  type: exitcode-stdio-1.0
+  main-is: Main.hs
+  hs-source-dirs: test
+  default-extensions: OverloadedStrings
+  build-depends: base
+                ,Tora
+                ,template-haskell
+                ,bytestring
 library
     build-depends:    base >= 4.13.3.0
                       ,array
@@ -36,6 +45,7 @@ library
                       ,transformers
 
     hs-source-dirs:   src
+    default-extensions: OverloadedStrings
     default-language: Haskell2010
     build-tools-depends: alex:alex, happy:happy
     exposed-modules:
@@ -43,6 +53,7 @@ library
                     ,Tora.Lexer
                     ,Tora.QQ
                     ,Tora.TypeChecker
+                    ,Tora.Test.TypeCheckerTests
                     ,Tora.AST
 
 executable Tora
