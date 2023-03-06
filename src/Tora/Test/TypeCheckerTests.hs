@@ -15,14 +15,26 @@ reservedTyNameTestString = testParse [tigerSrc| type string = Nil |]
 
 tyDecAdjacentReservedFail = testParse [tigerSrc| type Foo = int
                                                  type string = Foo |]
+
+tyDecAdjacentMissing = testParse [tigerSrc| type foo = int
+                                            type bar = QUUXX |]
 -- Valid Programs
 tyDecSimpleTest = testParse [tigerSrc| type foo = int |]
 
---TODO impl scope insertion
-tyDecAdjacent = testParse [tigerSrc| type foo = int
-                                     type bar = foo |]
+tyDecAdjacentValid = testParse [tigerSrc| type foo = int
+                                          type bar = foo |]
 
 
+{-
+tyDecLookupChaining = testParse [tigerSrc| type foo = int
+                                           function bar() =
+                                             let type quux = foo in nil
+                                           end |]
+-}
+
+--
+--
+--
 -- scopePopping = testParse [tigerSrc| let var v := 6 in nil end |]
 -- funParse = testParse [tigerSrc| function foo(t : int) = 5 |]
 -- funLetParse = testParse [tigerSrc| let function foo(t : int) = 5 in nil end |]

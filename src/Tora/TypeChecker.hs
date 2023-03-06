@@ -6,13 +6,13 @@ import qualified Data.Set as S
 
 import Tora.AST
 
+import Data.Maybe (isNothing)
 import Control.Monad
 import Control.Monad.Gen
 import Control.Monad.Trans.Maybe
 import Control.Applicative
 import Prelude hiding (lookup)
 import Data.ByteString.Lazy.Char8 (ByteString)
-import Language.Haskell.TH (lookupTypeName)
 
 data Ty a = TigInt
           | TigString
@@ -25,22 +25,35 @@ data Ty a = TigInt
 data TypeError = AssertTyError
                | ReservedBaseTyNameError
                | MissingTypeNameAliasingError
+               | VarTyDecShadowError
                deriving Show
+
+data EnvEntry t = VarEntry t
+                | FunEntry [t] t
 
 --Slow chained scopes
 data Env t = EmptyEnv
            | LexicalScope {
-               varScope :: M.Map ByteString t
-               ,funTypeScope :: M.Map ByteString t
-               ,parentScope :: Env t
+               vEnv :: M.Map ByteString (EnvEntry t) -- Variables and function declarations
+               ,tyScope :: M.Map ByteString t        -- Type Decls
+               ,parentScope :: Env t                 -- Chained Parent Scope SLOW
            }
 type Environment a = Env (Ty a)
 
-varLookup :: Env b -> Name a -> Maybe b
+varLookup :: Env b -> Name a -> Maybe (EnvEntry b)
 varLookup EmptyEnv _ = Nothing
 varLookup (LexicalScope s  _ p) name@(Name _ n) = case M.lookup n s of
                                                 Just t -> Just t
                                                 Nothing -> varLookup p name
+
+varLocalLookup :: Env b -> Name a -> Maybe (EnvEntry b)
+varLocalLookup EmptyEnv _ = Nothing
+varLocalLookup (LexicalScope s _ _) (Name _ n) = M.lookup n s
+
+insertTyScopeEnv :: Environment a -> Name a -> Ty a -> Environment a
+insertTyScopeEnv EmptyEnv (Name _ n) t = LexicalScope M.empty (M.singleton n t) EmptyEnv
+insertTyScopeEnv (LexicalScope vE tS p) (Name _ n) t = LexicalScope vE tS' p
+  where tS' = M.insert n t tS
 
 typeLookup :: Env b -> Name a -> Maybe b
 typeLookup EmptyEnv _ = Nothing
@@ -48,10 +61,6 @@ typeLookup (LexicalScope _  s p) name@(Name _ n) = case M.lookup n s of
                                                 Just t -> Just t
                                                 Nothing -> typeLookup p name
 
-
---TODO this needs to branch correctly on the type spaces
-insertTyEnv :: Environment a -> Name a -> Ty a -> Environment a
-insertTyEnv = undefined --TODO!!
 
 assertTyE :: Eq a => Environment a -> Expr b -> Ty a -> Either TypeError ()
 assertTyE env expr t = do
@@ -70,7 +79,10 @@ typeCheckDecs env (d:ds) = do
   mTy <- typeCheckDec env d
   env' <- case mTy of
             Nothing -> Right env
-            Just (name, ty) -> Right $ insertTyEnv env name ty
+                                --Check Var Decl hasn't been made before
+            Just (name, ty) -> if isNothing (varLocalLookup env name)
+                               then Right $ insertTyScopeEnv env name ty
+                               else Left VarTyDecShadowError
   typeCheckDecs env' ds
 
 typeCheckDec :: Eq a => Environment a -> Declaration a -> Either TypeError (Maybe (Name a,Ty a))
@@ -94,3 +106,11 @@ typeCheckE = undefined
 
 withScope :: Ord a => Environment a -> [Declaration a] -> Environment a
 withScope env decs = undefined --TODO modify env
+
+
+--TODO nil belongs to any record type
+--TODO record type uniqueness
+--TODO array type uniqueness
+--TODO recurisve functions need to be typechecked carefully
+--SKIP? Mutually recursive functions
+--Nesting of break statements
