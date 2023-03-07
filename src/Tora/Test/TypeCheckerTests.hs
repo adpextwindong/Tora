@@ -81,3 +81,15 @@ invalidTyCheck caseName err inputProg = TestCase $ assertEqual caseName (Left er
   --  in Nil
 --
 -- Should fail to type check
+--
+{-
+--TODO expand on these examples from pg 516 to do proper typechecking on. Give missing types, var decls etc...
+testParse [tigerSrc| var a : my_record := nil |] -- OK
+testParse [tigerSrc| a := nil |] -- OK
+testParse [tigerSrc| if a <> nil then ... |] -- OK
+testParse [tigerSrc| if nil <> a then ... |] -- OK
+testParse [tigerSrc| if a = nil then ... |] -- OK
+testParse [tigerSrc| function f(p: my_record) = ... f(nil) |] -- OK
+testParse [tigerSrc| var a := nil |] -- ILLEGAL
+testParse [tigerSrc| if nil = nil then ... |] -- ILLEGAL
+-}
