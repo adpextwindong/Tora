@@ -90,9 +90,12 @@ typeCheckDec :: Eq a => Environment a -> Declaration a -> Either TypeError (Mayb
 typeCheckDec env (TypeDeclaration info name ty) | isReservedTyName name = Left ReservedBaseTyNameError
                                                 | otherwise = typeCheckTyDec env name ty
 typeCheckDec env (VarDeclaration _ name Nothing (NilExpr _)) = Left RawVarNilDeclError
---typeCheckDec env (VarDeclaration _ name Nothing e) = ... TODO!
+typeCheckDec env (VarDeclaration _ name Nothing e) = do
+  tyE <- typeCheckE env e
+  Right $ Just (name, tyE)
+
 --typeCheckDec env (VarDeclaration _ name (Just t) (NilExpr _)) = TODO! CHECK T FOR RECORD TYPE SEE PAGE 516 EX1
---typeCheckDec env (VarDeclaration _ name (Just t) e) = TODO! CHECK T AGAINST ty of e
+--typeCheckDec env (VarDeclaration _ name (Just t) e) = TODO! CHECK T AGAINST ty of e, typeToTy for eq'ing
 --
 --typeCheckDec TODO VarDecl
 --typeCheckDec TODO FunDecl
@@ -111,6 +114,8 @@ isReservedTyName (Name a name) = name == "int" || name == "string"
 
 typeCheckE :: Env (Ty a) -> Expr b -> Either TypeError (Ty a)
 typeCheckE _ (NilExpr _) = Right TigNil
+typeCheckE _ (IntLitExpr _ _) = Right TigInt
+typeCheckE _ (StringLitExpr _ _) = Right TigString
 --TODO typeCheck EXPR(..)
 
 --TODO LetExpr creates a new scope for ty checking declarations

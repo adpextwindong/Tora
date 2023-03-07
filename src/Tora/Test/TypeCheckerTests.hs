@@ -28,9 +28,18 @@ tyDecSimpleTest = testParse [tigerSrc| type foo = int |]
 tyDecAdjacentValid = testParse [tigerSrc| type foo = int
                                           type bar = foo |]
 
+tyIntVarRawSimple = testParse [tigerSrc| var a := 5 |]
+tyStringVarRawSimple = testParse [tigerSrc| var a := "foo" |]
+--TODO! tyIntVarTypedSimple = testParse [tigerSrc| var a : int := 5 |]
+--TODO! [tigerSrc| var a = "foo"
+--                 var b : int := a |]
+--
 -- Valid ProgExprs
 
 tyNilProgExpr = testParse [tigerSrc| nil |]
+tyIntLitProgExpr = testParse [tigerSrc| 5 |]
+tyStringLitProgExpr = testParse [tigerSrc| "foo" |]
+
 {-
 tyDecLookupChaining = testParse [tigerSrc| type foo = int
                                            function bar() =
@@ -41,7 +50,13 @@ tyDecLookupChaining = testParse [tigerSrc| type foo = int
 validTests = TestList [
     validTyCheck "Simple single type decl" tyDecSimpleTest
    ,validTyCheck "Adjacent Valid type decls" tyDecAdjacentValid
+
+   ,validTyCheck "Simple int lit var decl" tyIntVarRawSimple
+   ,validTyCheck "Simple string lit var decl" tyStringVarRawSimple
+
    ,validTyCheck "Simple nil expr" tyNilProgExpr
+   ,validTyCheck "Simple int lit expr" tyIntLitProgExpr
+   ,validTyCheck "Simple string lit expr" tyStringLitProgExpr
   ]
 
 invalidTests = TestList [
