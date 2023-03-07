@@ -26,7 +26,7 @@ data TypeError = AssertTyError
                | ReservedBaseTyNameError
                | MissingTypeNameAliasingError
                | VarTyDecShadowError
-               deriving Show
+               deriving (Show, Eq)
 
 data EnvEntry t = VarEntry t
                 | FunEntry [t] t
