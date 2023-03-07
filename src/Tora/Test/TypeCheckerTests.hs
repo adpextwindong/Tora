@@ -19,6 +19,8 @@ tyDecAdjacentReservedFail = testParse [tigerSrc| type Foo = int
 
 tyDecAdjacentMissing = testParse [tigerSrc| type foo = int
                                             type bar = QUUXX |]
+
+varDeclRawToNil = testParse [tigerSrc| var a := nil |]
 -- Valid Programs
 tyDecSimpleTest = testParse [tigerSrc| type foo = int |]
 
@@ -42,6 +44,10 @@ invalidTests = TestList [
      ,invalidTyCheck "String Reserved Base Type" ReservedBaseTyNameError reservedTyNameTestString
     ])
     ,invalidTyCheck "Adjacent Reserved Base Type" ReservedBaseTyNameError tyDecAdjacentReservedFail
+
+    ,TestLabel "Nil Handling Failure Tests" (TestList [
+      invalidTyCheck "Untyped Var Decl Assigned as Nil" RawVarNilDeclError varDeclRawToNil
+    ])
 
   ]
 
@@ -90,6 +96,6 @@ testParse [tigerSrc| if a <> nil then ... |] -- OK
 testParse [tigerSrc| if nil <> a then ... |] -- OK
 testParse [tigerSrc| if a = nil then ... |] -- OK
 testParse [tigerSrc| function f(p: my_record) = ... f(nil) |] -- OK
-testParse [tigerSrc| var a := nil |] -- ILLEGAL
+testParse [tigerSrc| var a := nil |] -- ILLEGAL IMPLEMENTED
 testParse [tigerSrc| if nil = nil then ... |] -- ILLEGAL
 -}

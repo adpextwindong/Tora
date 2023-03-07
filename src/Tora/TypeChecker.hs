@@ -26,6 +26,7 @@ data TypeError = AssertTyError
                | ReservedBaseTyNameError
                | MissingTypeNameAliasingError
                | VarTyDecShadowError
+               | RawVarNilDeclError
                deriving (Show, Eq)
 
 data EnvEntry t = VarEntry t
@@ -88,6 +89,10 @@ typeCheckDecs env (d:ds) = do
 typeCheckDec :: Eq a => Environment a -> Declaration a -> Either TypeError (Maybe (Name a,Ty a))
 typeCheckDec env (TypeDeclaration info name ty) | isReservedTyName name = Left ReservedBaseTyNameError
                                                 | otherwise = typeCheckTyDec env name ty
+typeCheckDec env (VarDeclaration _ name Nothing (NilExpr _)) = Left RawVarNilDeclError
+
+--typeCheckDec TODO VarDecl
+--typeCheckDec TODO FunDecl
 
 typeCheckTyDec :: Eq a => Environment a -> Name a -> Type a -> Either TypeError (Maybe (Name a,Ty a))
 typeCheckTyDec env name (TVar _ n@(Name _ s)) | s == "int"    = Right $ Just (name, TigInt)
@@ -95,12 +100,15 @@ typeCheckTyDec env name (TVar _ n@(Name _ s)) | s == "int"    = Right $ Just (na
                                               | otherwise = case typeLookup env n of
                                                               Nothing -> Left MissingTypeNameAliasingError
                                                               Just t -> Right $ Just (name, t)
+--typeCheckTyDec TODO TRecord, TyField, Nil handling
+--typeCheckTyDec TODO TArray
 
 isReservedTyName :: Name a -> Bool
 isReservedTyName (Name a name) = name == "int" || name == "string"
 
 typeCheckE :: Env (Ty a) -> Expr b -> Either TypeError (Ty a)
 typeCheckE = undefined
+--TODO typeCheck EXPR(..)
 
 --TODO LetExpr creates a new scope for ty checking declarations
 
