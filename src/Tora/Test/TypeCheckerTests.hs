@@ -21,11 +21,16 @@ tyDecAdjacentMissing = testParse [tigerSrc| type foo = int
                                             type bar = QUUXX |]
 
 varDeclRawToNil = testParse [tigerSrc| var a := nil |]
+
 -- Valid Programs
 tyDecSimpleTest = testParse [tigerSrc| type foo = int |]
 
 tyDecAdjacentValid = testParse [tigerSrc| type foo = int
                                           type bar = foo |]
+
+-- Valid ProgExprs
+
+tyNilProgExpr = testParse [tigerSrc| nil |]
 {-
 tyDecLookupChaining = testParse [tigerSrc| type foo = int
                                            function bar() =
@@ -36,6 +41,7 @@ tyDecLookupChaining = testParse [tigerSrc| type foo = int
 validTests = TestList [
     validTyCheck "Simple single type decl" tyDecSimpleTest
    ,validTyCheck "Adjacent Valid type decls" tyDecAdjacentValid
+   ,validTyCheck "Simple nil expr" tyNilProgExpr
   ]
 
 invalidTests = TestList [
