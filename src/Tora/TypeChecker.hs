@@ -14,6 +14,8 @@ import Control.Applicative
 import Prelude hiding (lookup)
 import Data.ByteString.Lazy.Char8 (ByteString)
 
+import Debug.Trace
+
 data Ty a = TigInt
           | TigString
           | TigRecord [(Name a, Ty a)] (Name a) --we need a unique id here
@@ -27,6 +29,7 @@ data TypeError = AssertTyError
                | MissingTypeNameAliasingError
                | VarTyDecShadowError
                | RawVarNilDeclError
+               | TypeAliasMismatchError
                deriving (Show, Eq)
 
 data EnvEntry t = VarEntry t
@@ -70,11 +73,13 @@ assertTyE env expr t = do
   then return ()
   else Left AssertTyError
 
-typeCheckProg :: Eq a => Program a -> Either TypeError ()
+traceTrick v = trace ("\n\nFIXME:\n" <> show (void v) <> "\n") False
+
+typeCheckProg :: (Show a, Eq a) => Program a -> Either TypeError ()
 typeCheckProg (ProgExpr _ e) = void $ typeCheckE EmptyEnv e
 typeCheckProg (ProgDecls _ decs) = void $ typeCheckDecs EmptyEnv decs
 
-typeCheckDecs :: Eq a => Environment a -> [Declaration a] -> Either TypeError (Env (Ty a))
+typeCheckDecs :: (Show a, Eq a) => Environment a -> [Declaration a] -> Either TypeError (Env (Ty a))
 typeCheckDecs env [] = return env
 typeCheckDecs env (d:ds) = do
   mTy <- typeCheckDec env d
@@ -86,7 +91,7 @@ typeCheckDecs env (d:ds) = do
                                else Left VarTyDecShadowError
   typeCheckDecs env' ds
 
-typeCheckDec :: Eq a => Environment a -> Declaration a -> Either TypeError (Maybe (Name a,Ty a))
+typeCheckDec :: (Show a, Eq a) => Environment a -> Declaration a -> Either TypeError (Maybe (Name a,Ty a))
 typeCheckDec env (TypeDeclaration info name ty) | isReservedTyName name = Left ReservedBaseTyNameError
                                                 | otherwise = typeCheckTyDec env name ty
 typeCheckDec env (VarDeclaration _ name Nothing (NilExpr _)) = Left RawVarNilDeclError
@@ -94,6 +99,30 @@ typeCheckDec env (VarDeclaration _ name Nothing e) = do
   tyE <- typeCheckE env e
   Right $ Just (name, tyE)
 
+typeCheckDec env (VarDeclaration _ name (Just (TVar _ n@(Name _ "int"))) e) = do
+  tyE <- typeCheckE env e
+  if tyE == TigInt
+  then Right $ Just (n,TigInt)
+  else Left TypeAliasMismatchError
+
+typeCheckDec env (VarDeclaration _ name (Just (TVar _ n@(Name _ "string"))) e) = do
+  tyE <- typeCheckE env e
+  if tyE == TigString
+  then Right $ Just (n,TigInt)
+  else Left TypeAliasMismatchError
+
+typeCheckDec env (VarDeclaration _ name (Just (TVar _ n@(Name _ _))) e) = do
+  tyE <- typeCheckE env e
+  case typeLookup env n of
+    Nothing -> Left MissingTypeNameAliasingError
+    Just t' -> do
+      assertTyE env e t'
+      Right $ Just (name, t')
+
+--TODO more Type cases
+typeCheckDec env decl | traceTrick decl = undefined
+
+typeCheckDec _ _ = undefined --TODO!!
 --typeCheckDec env (VarDeclaration _ name (Just t) (NilExpr _)) = TODO! CHECK T FOR RECORD TYPE SEE PAGE 516 EX1
 --typeCheckDec env (VarDeclaration _ name (Just t) e) = TODO! CHECK T AGAINST ty of e, typeToTy for eq'ing
 --
@@ -106,6 +135,7 @@ typeCheckTyDec env name (TVar _ n@(Name _ s)) | s == "int"    = Right $ Just (na
                                               | otherwise = case typeLookup env n of
                                                               Nothing -> Left MissingTypeNameAliasingError
                                                               Just t -> Right $ Just (name, t)
+typeCheckTyDec _ _ _ = undefined --TODO!!
 --typeCheckTyDec TODO TRecord, TyField, Nil handling
 --typeCheckTyDec TODO TArray
 
@@ -116,6 +146,7 @@ typeCheckE :: Env (Ty a) -> Expr b -> Either TypeError (Ty a)
 typeCheckE _ (NilExpr _) = Right TigNil
 typeCheckE _ (IntLitExpr _ _) = Right TigInt
 typeCheckE _ (StringLitExpr _ _) = Right TigString
+typeCheckE _ _ = undefined --TODO!!
 --TODO typeCheck EXPR(..)
 
 --TODO LetExpr creates a new scope for ty checking declarations
@@ -123,10 +154,29 @@ typeCheckE _ (StringLitExpr _ _) = Right TigString
 withScope :: Ord a => Environment a -> [Declaration a] -> Environment a
 withScope env decs = undefined --TODO modify env
 
-
+--TODO walk through the AST types and make tests
 --TODO nil belongs to any record type
 --TODO record type uniqueness
 --TODO array type uniqueness
 --TODO recurisve functions need to be typechecked carefully
 --SKIP? Mutually recursive functions
 --Nesting of break statements
+--
+
+{-
+ -
+ - AST TODO
+ - Declaration
+ -  - TypeDeclaration
+ -  - VarDeclaration
+ -  - FunDeclaration
+ - Type
+ -  - TVar
+ -  - TRecord
+ -  - TArray
+ -
+ - TyField
+
+ - Expr
+ - LValue
+-}

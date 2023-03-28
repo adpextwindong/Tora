@@ -9,8 +9,8 @@ import Tora.AST
 import Tora.TypeChecker
 
 import Test.HUnit
+import Tora.Parser (testParse)
 
--- Invalid Programs
 reservedTyNameTestInt = testParse [tigerSrc| type int = Nil |]
 reservedTyNameTestString = testParse [tigerSrc| type string = Nil |]
 
@@ -20,9 +20,7 @@ tyDecAdjacentReservedFail = testParse [tigerSrc| type Foo = int
 tyDecAdjacentMissing = testParse [tigerSrc| type foo = int
                                             type bar = QUUXX |]
 
-varDeclRawToNil = testParse [tigerSrc| var a := nil |]
 
--- Valid Programs
 tyDecSimpleTest = testParse [tigerSrc| type foo = int |]
 
 tyDecAdjacentValid = testParse [tigerSrc| type foo = int
@@ -30,16 +28,13 @@ tyDecAdjacentValid = testParse [tigerSrc| type foo = int
 
 tyIntVarRawSimple = testParse [tigerSrc| var a := 5 |]
 tyStringVarRawSimple = testParse [tigerSrc| var a := "foo" |]
---TODO! tyIntVarTypedSimple = testParse [tigerSrc| var a : int := 5 |]
+
+tyIntVarTypedSimple = testParse [tigerSrc| var a : int := 5 |]
+tyStringVarTypedSimple = testParse [tigerSrc| var a : string := "five" |]
 --TODO! [tigerSrc| var a = "foo"
 --                 var b : int := a |]
 --
 -- Valid ProgExprs
-
-tyNilProgExpr = testParse [tigerSrc| nil |]
-tyIntLitProgExpr = testParse [tigerSrc| 5 |]
-tyStringLitProgExpr = testParse [tigerSrc| "foo" |]
-
 {-
 tyDecLookupChaining = testParse [tigerSrc| type foo = int
                                            function bar() =
@@ -47,34 +42,68 @@ tyDecLookupChaining = testParse [tigerSrc| type foo = int
                                            end |]
 -}
 
-validTests = TestList [
+typeDeclTests = TestList [
     validTyCheck "Simple single type decl" tyDecSimpleTest
    ,validTyCheck "Adjacent Valid type decls" tyDecAdjacentValid
 
    ,validTyCheck "Simple int lit var decl" tyIntVarRawSimple
    ,validTyCheck "Simple string lit var decl" tyStringVarRawSimple
 
-   ,validTyCheck "Simple nil expr" tyNilProgExpr
-   ,validTyCheck "Simple int lit expr" tyIntLitProgExpr
-   ,validTyCheck "Simple string lit expr" tyStringLitProgExpr
-  ]
-
-invalidTests = TestList [
-    TestLabel "Reserved type keyword tests" (TestList [
+   ,TestLabel "Reserved type keyword tests" (TestList [
       invalidTyCheck "Int Reserved Base Type" ReservedBaseTyNameError reservedTyNameTestInt
      ,invalidTyCheck "String Reserved Base Type" ReservedBaseTyNameError reservedTyNameTestString
     ])
-    ,invalidTyCheck "Adjacent Reserved Base Type" ReservedBaseTyNameError tyDecAdjacentReservedFail
 
-    ,TestLabel "Nil Handling Failure Tests" (TestList [
-      invalidTyCheck "Untyped Var Decl Assigned as Nil" RawVarNilDeclError varDeclRawToNil
-    ])
+    ,invalidTyCheck "Adjacent Reserved Base Type" ReservedBaseTyNameError tyDecAdjacentReservedFail
 
   ]
 
+varDeclRawToNil = testParse [tigerSrc| var a := nil |]
+
+untypedVarDeclAssignedAsNilTest = invalidTyCheck "Untyped Var Decl Assigned as Nil" RawVarNilDeclError varDeclRawToNil
+
+
+varDeclTests = TestList [
+  untypedVarDeclAssignedAsNilTest
+  ,validTyCheck "Int Ty Var Decl" tyIntVarTypedSimple
+  ,validTyCheck "String Ty Var Decl" tyStringVarTypedSimple
+  ,invalidTyCheck "Var Expr Type Decl Mismatch" TypeAliasMismatchError $ testParse
+    [tigerSrc| var x : string := 5|]
+
+   ,invalidTyCheck "Type Alias Mismatch Base Int" AssertTyError $ testParse
+    [tigerSrc| type foo = int
+               var x : foo := "five"|]
+
+ --TODO
+  ]
+
+tyNilProgExpr = testParse [tigerSrc| nil |]
+tyIntLitProgExpr = testParse [tigerSrc| 5 |]
+tyStringLitProgExpr = testParse [tigerSrc| "foo" |]
+
+exprTests = TestList [
+   validTyCheck "Simple nil expr" tyNilProgExpr
+   ,validTyCheck "Simple int lit expr" tyIntLitProgExpr
+   ,validTyCheck "Simple string lit expr" tyStringLitProgExpr
+   --TODO
+  ]
+
+astTests = TestList [
+  TestLabel "Type Declaration Tests" typeDeclTests
+  ,TestLabel "Var Decl Tests" varDeclTests
+  ,TestLabel "Expr Tests" exprTests
+  --TODO
+  ]
+
+nilHandlingTests = TestLabel "Nil Handling Failure Tests" $ TestList [
+  untypedVarDeclAssignedAsNilTest
+  --TODO
+    ]
+
+
 tests = TestList [
-    TestLabel "Valid Programs" validTests
-   ,TestLabel "Invalid Programs" invalidTests
+   astTests
+   ,nilHandlingTests
    ]
 
 runTyCheckTests = runTestTT tests

@@ -1,4 +1,7 @@
 module Main where
 
 import Tora.Test.TypeCheckerTests
-main = print "hello world"
+
+main = do
+  putStrLn "Running TypeChecker test suite"
+  runTyCheckTests
