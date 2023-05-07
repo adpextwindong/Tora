@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 module Tora.TypeChecker where
 
 import qualified Data.Map as M
@@ -15,12 +16,15 @@ import Prelude hiding (lookup)
 import Data.ByteString.Lazy.Char8 (ByteString)
 
 import Data.Unique (Unique, newUnique)
+import Control.Monad.Except
 
 import Debug.Trace
 
+type TypeCheckM = ExceptT TypeError IO
+
 data Ty a = TigInt
           | TigString
-          | TigRecord [(Name a, Ty a)] (Name a) --we need a unique id here
+          | TigRecord [(Name a, Ty a)] (Maybe Unique)
           | TigArray (Ty a) (Name a)
           | TigNil
           | TigUnit
@@ -34,6 +38,9 @@ data TypeError = AssertTyError
                | TypeAliasMismatchError
                | NothingTypeInField --TODO test
                | NonUniqueRecordFieldName --TODO test
+               | RecordFieldMismatchError
+               | RecordFieldExprNameMismatch
+               | RecordExprTyFieldMismatch
                deriving (Show, Eq)
 
 data EnvEntry t = VarEntry t
@@ -70,59 +77,78 @@ typeLookup (LexicalScope _  s p) name@(Name _ n) = case M.lookup n s of
                                                 Nothing -> typeLookup p name
 
 
-assertTyE :: Eq a => Environment a -> Expr b -> Ty a -> Either TypeError ()
+assertTyE :: Eq a => Environment a -> Expr a -> Ty a -> TypeCheckM ()
 assertTyE env expr t = do
   ty <- typeCheckE env expr
   if t == ty
   then return ()
-  else Left AssertTyError
+  else throwError AssertTyError
 
 traceTrick v = trace ("\n\nFIXME:\n" <> show (void v) <> "\n") False
+traceTrick2 e t = trace ("\n\nFIXME:\n" <> show (void t) <> "\n" <> show (void e)) False
 
-typeCheckProg :: (Show a, Eq a) => Program a -> Either TypeError ()
-typeCheckProg (ProgExpr _ e) = void $ typeCheckE EmptyEnv e
-typeCheckProg (ProgDecls _ decs) = void $ typeCheckDecs EmptyEnv decs
+typeCheckProg :: (Show a, Eq a) => Program a -> IO (Either TypeError ())
+typeCheckProg (ProgExpr _ e) = runExceptT $ void $ typeCheckE EmptyEnv e
+typeCheckProg (ProgDecls _ decs) = runExceptT $ void $ typeCheckDecs EmptyEnv decs
 
-typeCheckDecs :: (Show a, Eq a) => Environment a -> [Declaration a] -> Either TypeError (Env (Ty a))
+typeCheckDecs :: (Show a, Eq a) => Environment a -> [Declaration a] -> TypeCheckM (Env (Ty a))
 typeCheckDecs env [] = return env
 typeCheckDecs env (d:ds) = do
   mTy <- typeCheckDec env d
   env' <- case mTy of
-            Nothing -> Right env
+            Nothing -> return env
                                 --Check Var Decl hasn't been made before
             Just (name, ty) -> if isNothing (varLocalLookup env name)
-                               then Right $ insertTyScopeEnv env name ty
-                               else Left VarTyDecShadowError
+                               then return $ insertTyScopeEnv env name ty
+                               else throwError VarTyDecShadowError
   typeCheckDecs env' ds
 
-typeCheckDec :: (Show a, Eq a) => Environment a -> Declaration a -> Either TypeError (Maybe (Name a,Ty a))
-typeCheckDec env (TypeDeclaration info name ty) | isReservedTyName name = Left ReservedBaseTyNameError
+typeCheckDec :: (Show a, Eq a) => Environment a -> Declaration a -> TypeCheckM (Maybe (Name a,Ty a))
+typeCheckDec env (TypeDeclaration info name ty) | isReservedTyName name = throwError ReservedBaseTyNameError
                                                 | otherwise = typeCheckTyDec env name ty --TODO typeCheckTyDec completeness
 
-typeCheckDec env (VarDeclaration _ name Nothing (NilExpr _)) = Left RawVarNilDeclError
+typeCheckDec env (VarDeclaration _ name Nothing (NilExpr _)) = throwError RawVarNilDeclError
 typeCheckDec env (VarDeclaration _ name Nothing e) = do
   tyE <- typeCheckE env e --TODO typeCheckE completeness
-  Right $ Just (name, tyE)
+  return $ Just (name, tyE)
 
 typeCheckDec env (VarDeclaration _ name (Just (TVar _ n@(Name _ "int"))) e) = do
   tyE <- typeCheckE env e
   if tyE == TigInt
-  then Right $ Just (n,TigInt)
-  else Left TypeAliasMismatchError
+  then return $ Just (n,TigInt)
+  else throwError TypeAliasMismatchError
 
 typeCheckDec env (VarDeclaration _ name (Just (TVar _ n@(Name _ "string"))) e) = do
   tyE <- typeCheckE env e
   if tyE == TigString
-  then Right $ Just (n,TigInt)
-  else Left TypeAliasMismatchError
+  then return $ Just (n,TigInt)
+  else throwError TypeAliasMismatchError
+
+--TODO record distinction scheme
+typeCheckDec env decl@(VarDeclaration _ name t@(Just (TVar _ n@(Name _ tn))) e@(RecordInitExpr _ (Name _ rn) rfields)) = do
+  case typeLookup env n of
+    Nothing -> do
+      tyE <- typeCheckE env e
+      return $ Just (n, tyE)
+    Just t@(TigRecord tfields _) -> do --figure out about unique
+      if tn == rn
+      then do
+        checkMatchingRecordConstructor env tfields rfields
+        return $ Just (n, t)
+      else throwError RecordFieldMismatchError
+    --Just _ =
+    --Just _ = throwError TypeAliasMismatchError --TODO {- type foo = int var bar : foo = baz { val = int } -}
+
+    --TODO {- type rec = { val : int } var foo : rec = rec { val = int } }
+
 
 typeCheckDec env (VarDeclaration _ name (Just (TVar _ n@(Name _ _))) e) = do --TODO TEST
   tyE <- typeCheckE env e
   case typeLookup env n of
-    Nothing -> Left MissingTypeNameAliasingError
+    Nothing -> throwError MissingTypeNameAliasingError
     Just t' -> do
       assertTyE env e t'
-      Right $ Just (name, t')
+      return $ Just (name, t')
 
 --TODO more Type cases
 typeCheckDec env decl | traceTrick decl = undefined
@@ -134,12 +160,12 @@ typeCheckDec _ _ = undefined --TODO!!
 --typeCheckDec TODO VarDecl
 --typeCheckDec TODO FunDecl
 
-typeCheckTyDec :: Eq a => Environment a -> Name a -> Type a -> Either TypeError (Maybe (Name a,Ty a))
-typeCheckTyDec env name (TVar _ n@(Name _ s)) | s == "int"    = Right $ Just (name, TigInt)
-                                              | s == "string" = Right $ Just (name, TigString)
+typeCheckTyDec :: Eq a => Environment a -> Name a -> Type a -> TypeCheckM (Maybe (Name a,Ty a))
+typeCheckTyDec env name (TVar _ n@(Name _ s)) | s == "int"    = return $ Just (name, TigInt)
+                                              | s == "string" = return $ Just (name, TigString)
                                               | otherwise = case typeLookup env n of
-                                                              Nothing -> Left MissingTypeNameAliasingError
-                                                              Just t -> Right $ Just (name, t)
+                                                              Nothing -> throwError MissingTypeNameAliasingError
+                                                              Just t -> return $ Just (name, t)
 
 typeCheckTyDec env name (TRecord _ fields) = do
   tys <- mapM (typeCheckField env) fields
@@ -147,28 +173,36 @@ typeCheckTyDec env name (TRecord _ fields) = do
   let uniqueFieldNames = S.fromList fieldNames
 
   if length uniqueFieldNames == length fieldNames
-  then Right $ Just (name, TigRecord tys name)
-  else Left NonUniqueRecordFieldName --TODO test case
+  then do
+    unid <- liftIO newUnique
+    return $ Just (name, TigRecord tys (Just unid))
+  else throwError NonUniqueRecordFieldName --TODO test case
 
 typeCheckTyDec _ _ _ = undefined --TODO!!
 --typeCheckTyDec TODO TRecord, TyField, Nil handling
 --typeCheckTyDec TODO TArray
 
-typeCheckField :: Eq a => Environment a -> TyField a -> Either TypeError (Name a, Ty a)
+typeCheckField :: Eq a => Environment a -> TyField a -> TypeCheckM (Name a, Ty a)
 typeCheckField env (TyField _ n t) = do
   p <- typeCheckTyDec env n t
   case p of
-    Just p' -> Right p'
-    Nothing -> Left NothingTypeInField --TODO test case for this path
+    Just p' -> return p'
+    Nothing -> throwError NothingTypeInField --TODO test case for this path
 
 
 isReservedTyName :: Name a -> Bool
 isReservedTyName (Name a name) = name == "int" || name == "string"
 
-typeCheckE :: Env (Ty a) -> Expr b -> Either TypeError (Ty a)
-typeCheckE _ (NilExpr _) = Right TigNil
-typeCheckE _ (IntLitExpr _ _) = Right TigInt
-typeCheckE _ (StringLitExpr _ _) = Right TigString
+typeCheckE :: Env (Ty a) -> Expr a -> TypeCheckM (Ty a)
+typeCheckE _ (NilExpr _) = return TigNil
+typeCheckE _ (IntLitExpr _ _) = return TigInt
+typeCheckE _ (StringLitExpr _ _) = return TigString
+
+typeCheckE env (RecordInitExpr _ n fields) = do
+  tys <- mapM (typeCheckE env . snd) fields
+  let fieldNames = fst <$> fields
+  return $ TigRecord (zip fieldNames tys) Nothing
+
 typeCheckE _ _ = undefined --TODO!!
 --TODO typeCheck EXPR(..)
 
@@ -176,6 +210,19 @@ typeCheckE _ _ = undefined --TODO!!
 
 withScope :: Ord a => Environment a -> [Declaration a] -> Environment a
 withScope env decs = undefined --TODO modify env
+
+checkMatchingRecordConstructor :: (Eq a) => Environment a -> [(Name a, Ty a)] -> [(Name a, Expr a)] -> TypeCheckM ()
+checkMatchingRecordConstructor env definitionTys exprFields =
+  let ns (Name _ s) = s in
+  if (ns . fst <$> definitionTys) == (ns . fst <$> exprFields)
+  then forM_ (zip (snd <$> definitionTys) (snd <$> exprFields)) $
+    \(tyDef, e) -> do
+      eTy <- typeCheckE env e
+      unless (tyDef == eTy) $ throwError RecordExprTyFieldMismatch
+  else throwError RecordFieldExprNameMismatch
+
+
+
 
 --TODO walk through the AST types and make tests
 --TODO nil belongs to any record type

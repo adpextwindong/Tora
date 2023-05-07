@@ -64,6 +64,23 @@ typeDeclTests = TestList [
 
 varDeclRawToNil = testParse [tigerSrc| var a := nil |]
 
+varDeclSimpleRecord = testParse [tigerSrc| type rec = { val : int }
+                                           var foo := rec { val = 42 } |]
+
+varDeclSimpleTypedRecord = testParse [tigerSrc|
+                                          var foo : rec := rec { val = 42 } |]
+
+varDeclSplitTypedRecord = testParse [tigerSrc| type rec = { val : int }
+                                          var foo : rec := rec { val = 42 } |]
+
+varDeclSplitTypedRecordLong = testParse [tigerSrc| type rec = { val : int, quux : int }
+                                          var foo : rec := rec { val = 42, quux = 666 } |]
+
+
+varDeclSplitTypedRecordLongBroken = testParse [tigerSrc| type rec = { val : string, quux : string }
+                                          var foo : rec := rec { val = 42, quux = 666 } |]
+
+
 untypedVarDeclAssignedAsNilTest = invalidTyCheck "Untyped Var Decl Assigned as Nil" RawVarNilDeclError varDeclRawToNil
 
 
@@ -78,7 +95,11 @@ varDeclTests = TestList [
     [tigerSrc| type foo = int
                var x : foo := "five"|]
 
- --TODO
+  ,validTyCheck "Simple Var Record Var Decl" varDeclSimpleRecord
+  ,validTyCheck "Typed Var Record Var Decl" varDeclSimpleTypedRecord
+  ,validTyCheck "Split Typed Var Record Var Decl" varDeclSplitTypedRecord
+  ,validTyCheck "Split Typed Var Record Var Decl Long" varDeclSplitTypedRecordLong
+  ,invalidTyCheck "Split Typed Var Record Var Decl Long Broken" RecordExprTyFieldMismatch varDeclSplitTypedRecordLongBroken
   ]
 
 tyNilProgExpr = testParse [tigerSrc| nil |]
@@ -113,10 +134,14 @@ tests = TestList [
 runTyCheckTests = runTestTT tests
 
 validTyCheck :: String -> Program L.Range -> Test
-validTyCheck caseName inputProg = TestLabel caseName $ TestCase $ assertEqual caseName (Right ()) (typeCheckProg inputProg)
+validTyCheck caseName inputProg = TestLabel caseName $ TestCase $ do
+  result <- typeCheckProg inputProg
+  assertEqual caseName (Right ()) result
 
 invalidTyCheck :: String -> TypeError -> Program L.Range -> Test
-invalidTyCheck caseName err inputProg = TestLabel caseName $ TestCase $ assertEqual caseName (Left err) (typeCheckProg inputProg)
+invalidTyCheck caseName err inputProg = TestLabel caseName $ TestCase $ do
+  result <- typeCheckProg inputProg
+  assertEqual caseName (Left err) result
 
 
 --
