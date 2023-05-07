@@ -14,6 +14,8 @@ import Control.Applicative
 import Prelude hiding (lookup)
 import Data.ByteString.Lazy.Char8 (ByteString)
 
+import Data.Unique (Unique, newUnique)
+
 import Debug.Trace
 
 data Ty a = TigInt
@@ -30,6 +32,8 @@ data TypeError = AssertTyError
                | VarTyDecShadowError
                | RawVarNilDeclError
                | TypeAliasMismatchError
+               | NothingTypeInField --TODO test
+               | NonUniqueRecordFieldName --TODO test
                deriving (Show, Eq)
 
 data EnvEntry t = VarEntry t
@@ -93,10 +97,11 @@ typeCheckDecs env (d:ds) = do
 
 typeCheckDec :: (Show a, Eq a) => Environment a -> Declaration a -> Either TypeError (Maybe (Name a,Ty a))
 typeCheckDec env (TypeDeclaration info name ty) | isReservedTyName name = Left ReservedBaseTyNameError
-                                                | otherwise = typeCheckTyDec env name ty
+                                                | otherwise = typeCheckTyDec env name ty --TODO typeCheckTyDec completeness
+
 typeCheckDec env (VarDeclaration _ name Nothing (NilExpr _)) = Left RawVarNilDeclError
 typeCheckDec env (VarDeclaration _ name Nothing e) = do
-  tyE <- typeCheckE env e
+  tyE <- typeCheckE env e --TODO typeCheckE completeness
   Right $ Just (name, tyE)
 
 typeCheckDec env (VarDeclaration _ name (Just (TVar _ n@(Name _ "int"))) e) = do
@@ -111,7 +116,7 @@ typeCheckDec env (VarDeclaration _ name (Just (TVar _ n@(Name _ "string"))) e) =
   then Right $ Just (n,TigInt)
   else Left TypeAliasMismatchError
 
-typeCheckDec env (VarDeclaration _ name (Just (TVar _ n@(Name _ _))) e) = do
+typeCheckDec env (VarDeclaration _ name (Just (TVar _ n@(Name _ _))) e) = do --TODO TEST
   tyE <- typeCheckE env e
   case typeLookup env n of
     Nothing -> Left MissingTypeNameAliasingError
@@ -135,9 +140,27 @@ typeCheckTyDec env name (TVar _ n@(Name _ s)) | s == "int"    = Right $ Just (na
                                               | otherwise = case typeLookup env n of
                                                               Nothing -> Left MissingTypeNameAliasingError
                                                               Just t -> Right $ Just (name, t)
+
+typeCheckTyDec env name (TRecord _ fields) = do
+  tys <- mapM (typeCheckField env) fields
+  let fieldNames = (\(TyField _ (Name _ s) _) -> s) <$> fields
+  let uniqueFieldNames = S.fromList fieldNames
+
+  if length uniqueFieldNames == length fieldNames
+  then Right $ Just (name, TigRecord tys name)
+  else Left NonUniqueRecordFieldName --TODO test case
+
 typeCheckTyDec _ _ _ = undefined --TODO!!
 --typeCheckTyDec TODO TRecord, TyField, Nil handling
 --typeCheckTyDec TODO TArray
+
+typeCheckField :: Eq a => Environment a -> TyField a -> Either TypeError (Name a, Ty a)
+typeCheckField env (TyField _ n t) = do
+  p <- typeCheckTyDec env n t
+  case p of
+    Just p' -> Right p'
+    Nothing -> Left NothingTypeInField --TODO test case for this path
+
 
 isReservedTyName :: Name a -> Bool
 isReservedTyName (Name a name) = name == "int" || name == "string"
@@ -168,8 +191,15 @@ withScope env decs = undefined --TODO modify env
  - AST TODO
  - Declaration
  -  - TypeDeclaration
+ -     - typeCheckTyDec completeness
+ -
  -  - VarDeclaration
+ -    - Nil Handling for record
+ -    - Record and Array
+ -
  -  - FunDeclaration
+ -    -TODO
+ -
  - Type
  -  - TVar
  -  - TRecord

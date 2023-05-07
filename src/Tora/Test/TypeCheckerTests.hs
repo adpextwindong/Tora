@@ -41,6 +41,8 @@ tyDecLookupChaining = testParse [tigerSrc| type foo = int
                                              let type quux = foo in nil
                                            end |]
 -}
+-- RECORD
+tyDecRecordSimpleTest = testParse [tigerSrc| type rec = { val : int } |]
 
 typeDeclTests = TestList [
     validTyCheck "Simple single type decl" tyDecSimpleTest
@@ -56,6 +58,8 @@ typeDeclTests = TestList [
 
     ,invalidTyCheck "Adjacent Reserved Base Type" ReservedBaseTyNameError tyDecAdjacentReservedFail
 
+
+    ,validTyCheck "Simple Record Type Decl" tyDecRecordSimpleTest
   ]
 
 varDeclRawToNil = testParse [tigerSrc| var a := nil |]
@@ -109,10 +113,10 @@ tests = TestList [
 runTyCheckTests = runTestTT tests
 
 validTyCheck :: String -> Program L.Range -> Test
-validTyCheck caseName inputProg = TestCase $ assertEqual caseName (Right ()) (typeCheckProg inputProg)
+validTyCheck caseName inputProg = TestLabel caseName $ TestCase $ assertEqual caseName (Right ()) (typeCheckProg inputProg)
 
 invalidTyCheck :: String -> TypeError -> Program L.Range -> Test
-invalidTyCheck caseName err inputProg = TestCase $ assertEqual caseName (Left err) (typeCheckProg inputProg)
+invalidTyCheck caseName err inputProg = TestLabel caseName $ TestCase $ assertEqual caseName (Left err) (typeCheckProg inputProg)
 
 
 --
@@ -128,7 +132,7 @@ invalidTyCheck caseName err inputProg = TestCase $ assertEqual caseName (Left er
 --
 -- Lexical scope shadowing
 -- function foo(t : int) : string =
---   let t : string = ... in t
+--   let t : string = ... in t = testParse [tigerSrc| type rec = { val : int } |]ssert
 --
 -- Lexical scope popping
 -- let
