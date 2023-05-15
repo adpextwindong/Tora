@@ -24,7 +24,7 @@ type TypeCheckM = ExceptT TypeError IO
 
 data Ty a = TigInt
           | TigString
-          | TigRecord [(Name a, Ty a)] (Maybe Unique)
+          | TigRecord [(Name a, Ty a)] (Maybe Unique) --TODO remove this maybe, typeCheckE should make sure the type is in the env
           | TigArray (Ty a) (Name a)
           | TigNil
           | TigUnit
@@ -38,10 +38,13 @@ data TypeError = AssertTyError
                | TypeAliasMismatchError
                | NothingTypeInField --TODO test
                | NonUniqueRecordFieldName --TODO test
+               | VarDeclTypeMismatchError
                | RecordFieldMismatchError
                | RecordFieldExprNameMismatch
                | RecordExprTyFieldMismatch
+               | RecordTypeMismatchError
                | AnonymousTypeUsageError
+               | InvalidLValueNameError
                deriving (Show, Eq)
 
 data EnvEntry t = VarEntry t
@@ -126,18 +129,19 @@ typeCheckDec env (VarDeclaration _ name (Just (TVar _ n@(Name _ "string"))) e) =
   else throwError TypeAliasMismatchError
 
 --TODO record distinction scheme
-typeCheckDec env decl@(VarDeclaration _ name t@(Just (TVar _ n@(Name _ tn))) e@(RecordInitExpr _ (Name _ rn) rfields)) = do
+typeCheckDec env decl@(VarDeclaration _ name t@(Just (TVar _ n@(Name _ tn))) e@(RecordInitExpr _ rt@(Name _ rn) rfields)) = do
   case typeLookup env n of
     Nothing -> throwError AnonymousTypeUsageError
     Just t@(TigRecord tfields _) -> do --figure out about unique
       if tn == rn
       then do
-        checkMatchingRecordConstructor env tfields rfields
+        -- TODO Check that the typename references the same Unid
+        -- TODO remove the maybe in TigRecord
+        checkMatchingRecUnid env (typeLookup env n) (typeLookup env rt)
+        checkMatchingRecConStructure env tfields rfields
         return $ Just (n, t)
-      else throwError RecordFieldMismatchError
-    --Just _ =
-    --Just _ = throwError TypeAliasMismatchError --TODO {- type foo = int var bar : foo = baz { val = int } -}
-
+      else throwError VarDeclTypeMismatchError
+    Just _ -> throwError TypeAliasMismatchError
 
 typeCheckDec env (VarDeclaration _ name (Just (TVar _ n@(Name _ _))) e) = do --TODO TEST
   tyE <- typeCheckE env e
@@ -172,7 +176,7 @@ typeCheckTyDec env name (TRecord _ fields) = do
   if length uniqueFieldNames == length fieldNames
   then do
     unid <- liftIO newUnique
-    return $ Just (name, TigRecord tys (Just unid))
+    return $ Just (name, TigRecord tys (Just unid)) --TODO remove this maybe.
   else throwError NonUniqueRecordFieldName --TODO test case
 
 typeCheckTyDec _ _ _ = undefined --TODO!!
@@ -199,8 +203,9 @@ typeCheckE env (RecordInitExpr _ n fields) = do
   tys <- mapM (typeCheckE env . snd) fields
   let fieldNames = fst <$> fields
   return $ TigRecord (zip fieldNames tys) Nothing
+    --TODO record distinction - this should check against the env for the RecordInitExpr, not stick a nothing here?
 
-typeCheckE _ _ = undefined --TODO!!
+typeCheckE _ v | traceTrick v = undefined
 --TODO typeCheck EXPR(..)
 
 --TODO LetExpr creates a new scope for ty checking declarations
@@ -208,8 +213,17 @@ typeCheckE _ _ = undefined --TODO!!
 withScope :: Ord a => Environment a -> [Declaration a] -> Environment a
 withScope env decs = undefined --TODO modify env
 
-checkMatchingRecordConstructor :: (Eq a) => Environment a -> [(Name a, Ty a)] -> [(Name a, Expr a)] -> TypeCheckM ()
-checkMatchingRecordConstructor env definitionTys exprFields =
+checkMatchingRecUnid :: Environment a -> Maybe (Ty a) -> Maybe (Ty a) -> TypeCheckM ()
+checkMatchingRecUnid env Nothing _ = undefined --TODO
+checkMatchingRecUnid env _ Nothing = undefined --TODO
+checkMatchingRecUnid env (Just (TigRecord _ u)) (Just (TigRecord _ u')) =
+  unless (u == u') $ throwError RecordTypeMismatchError
+checkMatchingRecUnid _ _ _ = undefined --TODO NotARecordTypeMatchError
+  --TODO
+
+--TODO record distinction scheme
+checkMatchingRecConStructure :: (Eq a) => Environment a -> [(Name a, Ty a)] -> [(Name a, Expr a)] -> TypeCheckM ()
+checkMatchingRecConStructure env definitionTys exprFields =
   let ns (Name _ s) = s in
   if (ns . fst <$> definitionTys) == (ns . fst <$> exprFields)
   then forM_ (zip (snd <$> definitionTys) (snd <$> exprFields)) $

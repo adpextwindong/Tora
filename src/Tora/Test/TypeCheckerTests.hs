@@ -10,6 +10,7 @@ import Tora.TypeChecker
 
 import Test.HUnit
 import Tora.Parser (testParse)
+import Tora.TypeChecker (TypeError(TypeAliasMismatchError))
 
 reservedTyNameTestInt = testParse [tigerSrc| type int = Nil |]
 reservedTyNameTestString = testParse [tigerSrc| type string = Nil |]
@@ -87,6 +88,13 @@ untypedVarDeclAssignedAsNilTest = invalidTyCheck "Untyped Var Decl Assigned as N
     --TODO {- type rec = { val : int } var foo : rec = rec { val = int } }
 varDeclNoTypeDeclRec = testParse [tigerSrc| var foo : rec := rec { val = int } |]
 
+varDeclMismatchRecord = testParse [tigerSrc| type a = { val : int }
+                                             type b = { val : int }
+                                             var foo : a := b { val = 1 } |] --Fails because of distinct record types
+
+varDeclRecTypeAliasMismatch = testParse [tigerSrc| type foo = int
+                                                   var bar : foo := baz { val = int } |]
+
 varDeclTests = TestList [
   untypedVarDeclAssignedAsNilTest
   ,validTyCheck "Int Ty Var Decl" tyIntVarTypedSimple
@@ -104,6 +112,8 @@ varDeclTests = TestList [
   ,validTyCheck "Split Typed Var Record Var Decl Long" varDeclSplitTypedRecordLong
   ,invalidTyCheck "Split Typed Var Record Var Decl Long Broken" RecordExprTyFieldMismatch varDeclSplitTypedRecordLongBroken
   ,invalidTyCheck "Rec Type Var Decl with no type decl" AnonymousTypeUsageError varDeclNoTypeDeclRec
+  ,invalidTyCheck "Mismatch Rec Type Var Decl" VarDeclTypeMismatchError varDeclMismatchRecord
+  ,invalidTyCheck "Rec Against not rec type mismatch" TypeAliasMismatchError varDeclRecTypeAliasMismatch
   ]
 
 tyNilProgExpr = testParse [tigerSrc| nil |]
