@@ -41,6 +41,7 @@ data TypeError = AssertTyError
                | RecordFieldMismatchError
                | RecordFieldExprNameMismatch
                | RecordExprTyFieldMismatch
+               | AnonymousTypeUsageError
                deriving (Show, Eq)
 
 data EnvEntry t = VarEntry t
@@ -127,9 +128,7 @@ typeCheckDec env (VarDeclaration _ name (Just (TVar _ n@(Name _ "string"))) e) =
 --TODO record distinction scheme
 typeCheckDec env decl@(VarDeclaration _ name t@(Just (TVar _ n@(Name _ tn))) e@(RecordInitExpr _ (Name _ rn) rfields)) = do
   case typeLookup env n of
-    Nothing -> do
-      tyE <- typeCheckE env e
-      return $ Just (n, tyE)
+    Nothing -> throwError AnonymousTypeUsageError
     Just t@(TigRecord tfields _) -> do --figure out about unique
       if tn == rn
       then do
@@ -138,8 +137,6 @@ typeCheckDec env decl@(VarDeclaration _ name t@(Just (TVar _ n@(Name _ tn))) e@(
       else throwError RecordFieldMismatchError
     --Just _ =
     --Just _ = throwError TypeAliasMismatchError --TODO {- type foo = int var bar : foo = baz { val = int } -}
-
-    --TODO {- type rec = { val : int } var foo : rec = rec { val = int } }
 
 
 typeCheckDec env (VarDeclaration _ name (Just (TVar _ n@(Name _ _))) e) = do --TODO TEST

@@ -68,6 +68,7 @@ varDeclSimpleRecord = testParse [tigerSrc| type rec = { val : int }
                                            var foo := rec { val = 42 } |]
 
 varDeclSimpleTypedRecord = testParse [tigerSrc|
+                                          type rec = { val : int }
                                           var foo : rec := rec { val = 42 } |]
 
 varDeclSplitTypedRecord = testParse [tigerSrc| type rec = { val : int }
@@ -83,6 +84,8 @@ varDeclSplitTypedRecordLongBroken = testParse [tigerSrc| type rec = { val : stri
 
 untypedVarDeclAssignedAsNilTest = invalidTyCheck "Untyped Var Decl Assigned as Nil" RawVarNilDeclError varDeclRawToNil
 
+    --TODO {- type rec = { val : int } var foo : rec = rec { val = int } }
+varDeclNoTypeDeclRec = testParse [tigerSrc| var foo : rec := rec { val = int } |]
 
 varDeclTests = TestList [
   untypedVarDeclAssignedAsNilTest
@@ -100,6 +103,7 @@ varDeclTests = TestList [
   ,validTyCheck "Split Typed Var Record Var Decl" varDeclSplitTypedRecord
   ,validTyCheck "Split Typed Var Record Var Decl Long" varDeclSplitTypedRecordLong
   ,invalidTyCheck "Split Typed Var Record Var Decl Long Broken" RecordExprTyFieldMismatch varDeclSplitTypedRecordLongBroken
+  ,invalidTyCheck "Rec Type Var Decl with no type decl" AnonymousTypeUsageError varDeclNoTypeDeclRec
   ]
 
 tyNilProgExpr = testParse [tigerSrc| nil |]
