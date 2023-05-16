@@ -19,7 +19,7 @@ type TypeCheckM = ExceptT TypeError IO
 
 data Ty a = TigInt
           | TigString
-          | TigRecord [(Name a, Ty a)] (Maybe Unique) --TODO remove this maybe, typeCheckE should make sure the type is in the env
+          | TigRecord [(Name a, Ty a)] Unique
           | TigArray (Ty a) (Name a)
           | TigNil
           | TigUnit
@@ -40,6 +40,7 @@ data TypeError = AssertTyError
                | RecordTypeMismatchError
                | AnonymousTypeUsageError
                | InvalidLValueNameError
+               | UndeclaredRecordTypeUsageError
                deriving (Show, Eq)
 
 data EnvEntry t = VarEntry t
@@ -52,6 +53,7 @@ data Env t = EmptyEnv
                ,tyScope :: M.Map ByteString t        -- Type Decls
                ,parentScope :: Env t                 -- Chained Parent Scope SLOW
            }
+
 type Environment a = Env (Ty a)
 
 varLookup :: Env b -> Name a -> Maybe (EnvEntry b)
@@ -123,20 +125,22 @@ typeCheckDec env (VarDeclaration _ name (Just (TVar _ n@(Name _ "string"))) e) =
   then return $ Just (n,TigInt)
   else throwError TypeAliasMismatchError
 
---TODO record distinction scheme
 typeCheckDec env decl@(VarDeclaration _ name t@(Just (TVar _ n@(Name _ tn))) e@(RecordInitExpr _ rt@(Name _ rn) rfields)) = do
   case typeLookup env n of
     Nothing -> throwError AnonymousTypeUsageError
-    Just t@(TigRecord tfields _) -> do --figure out about unique
+    Just t@(TigRecord _ _) -> do
       if tn == rn
       then do
-        -- TODO Check that the typename references the same Unid
-        -- TODO remove the maybe in TigRecord
-        checkMatchingRecUnid env (typeLookup env n) (typeLookup env rt)
-        checkMatchingRecConStructure env tfields rfields
+        checkMatchingRecUnid env t (typeLookup env rt)
+        typeCheckE env e
         return $ Just (n, t)
       else throwError VarDeclTypeMismatchError
     Just _ -> throwError TypeAliasMismatchError
+  where
+    checkMatchingRecUnid :: Environment a -> Ty a -> Maybe (Ty a) -> TypeCheckM ()
+    checkMatchingRecUnid env (TigRecord _ u) (Just (TigRecord _ u')) =
+      unless (u == u') $ throwError RecordTypeMismatchError
+
 
 typeCheckDec env (VarDeclaration _ name (Just (TVar _ n@(Name _ _))) e) = do --TODO TEST
   tyE <- typeCheckE env e
@@ -171,11 +175,11 @@ typeCheckTyDec env name (TRecord _ fields) = do
   if length uniqueFieldNames == length fieldNames
   then do
     unid <- liftIO newUnique
-    return $ Just (name, TigRecord tys (Just unid)) --TODO remove this maybe.
+    return $ Just (name, TigRecord tys unid)
   else throwError NonUniqueRecordFieldName --TODO test case
 
 typeCheckTyDec _ _ _ = undefined --TODO!!
---typeCheckTyDec TODO TRecord, TyField, Nil handling
+--typeCheckTyDec TODO TRecord Nil Handling, TyField, Nil handling
 --typeCheckTyDec TODO TArray
 
 typeCheckField :: Eq a => Environment a -> TyField a -> TypeCheckM (Name a, Ty a)
@@ -189,16 +193,18 @@ typeCheckField env (TyField _ n t) = do
 isReservedTyName :: Name a -> Bool
 isReservedTyName (Name a name) = name == "int" || name == "string"
 
-typeCheckE :: Env (Ty a) -> Expr a -> TypeCheckM (Ty a)
+typeCheckE :: Eq a => Env (Ty a) -> Expr a -> TypeCheckM (Ty a)
 typeCheckE _ (NilExpr _) = return TigNil
 typeCheckE _ (IntLitExpr _ _) = return TigInt
 typeCheckE _ (StringLitExpr _ _) = return TigString
 
-typeCheckE env (RecordInitExpr _ n fields) = do
-  tys <- mapM (typeCheckE env . snd) fields
-  let fieldNames = fst <$> fields
-  return $ TigRecord (zip fieldNames tys) Nothing
-    --TODO record distinction - this should check against the env for the RecordInitExpr, not stick a nothing here?
+typeCheckE env (RecordInitExpr _ n rfields) = do
+  case typeLookup env n of
+    Nothing -> throwError UndeclaredRecordTypeUsageError -- TODO TEST [tigerSrc| var x = foo { val = 1 } |]
+    Just (t@(TigRecord tfields unid)) -> do
+       checkMatchingRecConStructure env tfields rfields
+       return $ t
+    _ -> throwError AssertTyError -- TODO TEST [tigerSrc| var x : int = rec { baz = 1 } |]
 
 typeCheckE _ v | traceTrick v = undefined
 --TODO typeCheck EXPR(..)
@@ -208,15 +214,6 @@ typeCheckE _ v | traceTrick v = undefined
 withScope :: Ord a => Environment a -> [Declaration a] -> Environment a
 withScope env decs = undefined --TODO modify env
 
-checkMatchingRecUnid :: Environment a -> Maybe (Ty a) -> Maybe (Ty a) -> TypeCheckM ()
-checkMatchingRecUnid env Nothing _ = undefined --TODO
-checkMatchingRecUnid env _ Nothing = undefined --TODO
-checkMatchingRecUnid env (Just (TigRecord _ u)) (Just (TigRecord _ u')) =
-  unless (u == u') $ throwError RecordTypeMismatchError
-checkMatchingRecUnid _ _ _ = undefined --TODO NotARecordTypeMatchError
-  --TODO
-
---TODO record distinction scheme
 checkMatchingRecConStructure :: (Eq a) => Environment a -> [(Name a, Ty a)] -> [(Name a, Expr a)] -> TypeCheckM ()
 checkMatchingRecConStructure env definitionTys exprFields =
   let ns (Name _ s) = s in
@@ -232,7 +229,6 @@ checkMatchingRecConStructure env definitionTys exprFields =
 
 --TODO walk through the AST types and make tests
 --TODO nil belongs to any record type
---TODO record type uniqueness
 --TODO array type uniqueness
 --TODO recurisve functions need to be typechecked carefully
 --SKIP? Mutually recursive functions

@@ -95,6 +95,9 @@ varDeclMismatchRecord = testParse [tigerSrc| type a = { val : int }
 varDeclRecTypeAliasMismatch = testParse [tigerSrc| type foo = int
                                                    var bar : foo := baz { val = int } |]
 
+undeclaredRecTypeVarDecl = testParse [tigerSrc| type rec = { val : int }
+                                                 var foo : rec := baz { val = 1 } |]
+
 varDeclTests = TestList [
   untypedVarDeclAssignedAsNilTest
   ,validTyCheck "Int Ty Var Decl" tyIntVarTypedSimple
@@ -114,6 +117,7 @@ varDeclTests = TestList [
   ,invalidTyCheck "Rec Type Var Decl with no type decl" AnonymousTypeUsageError varDeclNoTypeDeclRec
   ,invalidTyCheck "Mismatch Rec Type Var Decl" VarDeclTypeMismatchError varDeclMismatchRecord
   ,invalidTyCheck "Rec Against not rec type mismatch" TypeAliasMismatchError varDeclRecTypeAliasMismatch
+  ,invalidTyCheck "Undeclared Rec Type Var Decl" VarDeclTypeMismatchError undeclaredRecTypeVarDecl
   ]
 
 tyNilProgExpr = testParse [tigerSrc| nil |]
