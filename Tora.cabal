@@ -43,8 +43,6 @@ library
                       ,extra
                       ,template-haskell
                       ,containers
-                      ,monad-gen
-                      ,transformers
 
     hs-source-dirs:   src
     default-extensions: OverloadedStrings

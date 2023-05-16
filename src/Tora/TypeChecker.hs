@@ -9,12 +9,7 @@ import Tora.AST
 
 import Data.Maybe (isNothing)
 import Control.Monad
-import Control.Monad.Gen
-import Control.Monad.Trans.Maybe
-import Control.Applicative
-import Prelude hiding (lookup)
 import Data.ByteString.Lazy.Char8 (ByteString)
-
 import Data.Unique (Unique, newUnique)
 import Control.Monad.Except
 
