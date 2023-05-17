@@ -151,6 +151,12 @@ whileExprLong = testParse [tigerSrc| while (let var x : int := 5 in 5 end) do (l
 
 whileMustProduceNothingExpr = testParse [tigerSrc| if 5 then (while 5 do ()) |]
 
+forBodySimpleExpr = testParse [tigerSrc| for i := 0 to 10 do () |]
+forBodyTestBinding = testParse [tigerSrc| for i := 0 to 10 do (i;()) |]
+forBodyBadHeadLeft = testParse [tigerSrc| for i := "foo" to 10 do () |]
+forBodyBadHeadRight = testParse [tigerSrc| for i := 0 to "foo" do () |]
+forBodyMustReturnNothing = testParse [tigerSrc| if 1 then (for x := 0 to 10 do ()) |]
+
 exprTests = TestList [
    validTyCheck "Simple nil expr" tyNilProgExpr
    ,validTyCheck "Simple int lit expr" tyIntLitProgExpr
@@ -171,6 +177,12 @@ exprTests = TestList [
    ,invalidTyCheck "Bad While Expr Cond" InvalidWhileCondTypeError simpleBadWhileExprCond
    ,validTyCheck "Long While Expr" whileExprLong
    ,validTyCheck "While Produces Nothing Type" whileMustProduceNothingExpr
+
+   ,validTyCheck "For Body Simple Expr" forBodySimpleExpr
+   ,validTyCheck "For Body Test Binding" forBodyTestBinding
+   ,invalidTyCheck "For Body Bad Init Start Type" InvalidForStartEndTypeError forBodyBadHeadLeft
+   ,invalidTyCheck "For Body Bad Init End Type" InvalidForStartEndTypeError forBodyBadHeadRight
+   ,validTyCheck "For Body Must Return NoValue Type" forBodyMustReturnNothing
    --TODO
   ]
 

@@ -2,10 +2,14 @@
 {-# LANGUAGE RecordWildCards #-}
 module Tora.TypeChecker where
 
-import qualified Data.Map as M
 import qualified Data.Set as S
 
 import Tora.AST
+
+--TODO clean env handling shit up
+import Tora.Environment (Environment, Env(..), EnvEntry(..),
+  typeLookup, varLookup, varLocalLookup,
+  insertVarScopeEnv, insertTyScopeEnv) -- This handling in particular
 
 import Data.Maybe (isNothing)
 import Control.Monad
@@ -16,15 +20,6 @@ import Control.Monad.Except
 import Debug.Trace
 
 type TypeCheckM = ExceptT TypeError IO
-
-data Ty a = TigInt
-          | TigString
-          | TigRecord [(Name a, Ty a)] Unique
-          | TigArray (Ty a) (Name a)
-          | TigNil
-          | TigUnit
-          | TigNoValue
-  deriving Eq
 
 data TypeError = AssertTyError
                | ReservedBaseTyNameError
@@ -48,42 +43,9 @@ data TypeError = AssertTyError
                | InvalidIFEBodyTypeError
                | InvalidWhileCondTypeError
                | InvalidWhileBodyTypeError
+               | InvalidForStartEndTypeError
+               | InvalidForBodyTypeError
                deriving (Show, Eq)
-
-data EnvEntry t = VarEntry t
-                | FunEntry [t] t
-
---Slow chained scopes
-data Env t = EmptyEnv
-           | LexicalScope {
-               vEnv :: M.Map ByteString (EnvEntry t) -- Variables and function declarations
-               ,tyScope :: M.Map ByteString t        -- Type Decls
-               ,parentScope :: Env t                 -- Chained Parent Scope SLOW
-           }
-
-type Environment a = Env (Ty a)
-
-varLookup :: Env b -> Name a -> Maybe (EnvEntry b)
-varLookup EmptyEnv _ = Nothing
-varLookup (LexicalScope s  _ p) name@(Name _ n) = case M.lookup n s of
-                                                Just t -> Just t
-                                                Nothing -> varLookup p name
-
-varLocalLookup :: Env b -> Name a -> Maybe (EnvEntry b)
-varLocalLookup EmptyEnv _ = Nothing
-varLocalLookup (LexicalScope s _ _) (Name _ n) = M.lookup n s
-
-insertTyScopeEnv :: Environment a -> Name a -> Ty a -> Environment a
-insertTyScopeEnv EmptyEnv (Name _ n) t = LexicalScope M.empty (M.singleton n t) EmptyEnv
-insertTyScopeEnv (LexicalScope vE tS p) (Name _ n) t = LexicalScope vE tS' p
-  where tS' = M.insert n t tS
-
-typeLookup :: Env b -> Name a -> Maybe b
-typeLookup EmptyEnv _ = Nothing
-typeLookup (LexicalScope _  s p) name@(Name _ n) = case M.lookup n s of
-                                                Just t -> Just t
-                                                Nothing -> typeLookup p name
-
 
 assertTyE :: Eq a => Environment a -> Expr a -> Ty a -> TypeCheckM ()
 assertTyE env expr t = do
@@ -227,7 +189,12 @@ typeCheckE env (LetExpr _ decs e) = do
 typeCheckE env (LValueExpr _ (LValueBase _ n)) = do
   case typeLookup env n of
     Just t -> return t
-    Nothing -> throwError $ InvalidLValueBaseNameError
+    --TODO hack around var lookup HUGEPITFALL
+    Nothing ->
+      case varLookup env n of
+        Just (VarEntry t) -> return t
+        Just (FunEntry _ t) -> return t
+        Nothing -> throwError $ InvalidLValueBaseNameError
 
 typeCheckE _ (NoValueExpr _) = return TigNoValue
 
@@ -262,12 +229,27 @@ typeCheckE env (WhileExpr _ cond e) = do
         _ -> throwError InvalidWhileBodyTypeError
     _ -> throwError InvalidWhileCondTypeError
 
+--TODO body may not assign to forVarName
+typeCheckE env (ForExpr lxr_range forVarName forVarEStart forVarEEnd body) = do
+  tstart <- typeCheckE env forVarEStart
+  tend <- typeCheckE env forVarEEnd
+
+  when (tstart /= TigInt || tend /= TigInt) $ throwError InvalidForStartEndTypeError
+
+  --HACK HUGE PITFALL this distinction between var scope and type scope is brittle as is rn
+  let env' = insertVarScopeEnv env forVarName TigInt
+  tbody <- typeCheckE env' body
+
+  case tbody of
+    TigNoValue -> return TigNoValue
+    _ -> throwError InvalidForBodyTypeError
+
 typeCheckE _ w | traceTrick w = undefined
 --TODO typeCheck EXPR(..)
 
 --TODO LetExpr creates a new scope for ty checking declarations
 
-withScope :: Ord a => Environment a -> [Declaration a] -> Environment a
+withScope :: Environment a -> [Declaration a] -> Environment a
 withScope env decs = undefined --TODO modify env
 
 checkMatchingRecConStructure :: (Eq a) => Environment a -> [(Name a, Ty a)] -> [(Name a, Expr a)] -> TypeCheckM ()

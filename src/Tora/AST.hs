@@ -1,7 +1,21 @@
 {-# LANGUAGE DeriveFoldable, DeriveFunctor #-}
 module Tora.AST where
 
+import Data.Unique (Unique)
 import Data.ByteString.Lazy.Char8 (ByteString)
+
+-----------------
+-- TypeChecker --
+-----------------
+
+data Ty a = TigInt
+          | TigString
+          | TigRecord [(Name a, Ty a)] Unique
+          | TigArray (Ty a) (Name a)
+          | TigNil
+          | TigUnit
+          | TigNoValue
+  deriving Eq
 
 ---------
 -- AST --

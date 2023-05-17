@@ -55,6 +55,7 @@ library
                     ,Tora.TypeChecker
                     ,Tora.Test.TypeCheckerTests
                     ,Tora.AST
+                    ,Tora.Environment
 
 executable Tora
     main-is:          Main.hs
