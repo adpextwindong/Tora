@@ -135,6 +135,7 @@ invalidLValueBaseInLetExpr = testParse [tigerSrc| var y := (let var x := "foo" i
 simpleNoValueExpr = testParse [tigerSrc| () |]
 simplestIFTExpr = testParse [tigerSrc| if 5 then () |]
 iftLETExpr = testParse [tigerSrc| if 5 then (let var x := 5 in 5; () end) |]
+nestedIfProducesNothingValue = testParse [tigerSrc| if 5 then (if 6 then ()) |]
 
 simpleIFEExpr = testParse [tigerSrc| if 5 then "foo" else "bar" |]
 
@@ -154,6 +155,7 @@ exprTests = TestList [
    ,validTyCheck "Simple Unit Value Expr" simpleNoValueExpr
    ,validTyCheck "Simplest IFT Expr" simplestIFTExpr
    ,validTyCheck "IFT Let Expr" iftLETExpr
+   ,validTyCheck "Nothing Value from nested IFT Expr" nestedIfProducesNothingValue
    ,validTyCheck "Simple IFEExpr" simpleIFEExpr
    ,invalidTyCheck "Simple IFE Head Fail" InvalidIFECondTypeError simpleIFEFailHead
    ,invalidTyCheck "Simple IFE Body Fail" InvalidIFEBodyTypeError simpleIFEFailBody
