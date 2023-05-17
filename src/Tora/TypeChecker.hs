@@ -41,6 +41,7 @@ data TypeError = AssertTyError
                | AnonymousTypeUsageError
                | InvalidLValueNameError
                | UndeclaredRecordTypeUsageError
+               | InvalidLValueBaseNameError
                deriving (Show, Eq)
 
 data EnvEntry t = VarEntry t
@@ -92,7 +93,7 @@ typeCheckProg :: (Show a, Eq a) => Program a -> IO (Either TypeError ())
 typeCheckProg (ProgExpr _ e) = runExceptT $ void $ typeCheckE EmptyEnv e
 typeCheckProg (ProgDecls _ decs) = runExceptT $ void $ typeCheckDecs EmptyEnv decs
 
-typeCheckDecs :: (Show a, Eq a) => Environment a -> [Declaration a] -> TypeCheckM (Env (Ty a))
+typeCheckDecs :: (Eq a) => Environment a -> [Declaration a] -> TypeCheckM (Env (Ty a))
 typeCheckDecs env [] = return env
 typeCheckDecs env (d:ds) = do
   mTy <- typeCheckDec env d
@@ -104,7 +105,7 @@ typeCheckDecs env (d:ds) = do
                                else throwError VarTyDecShadowError
   typeCheckDecs env' ds
 
-typeCheckDec :: (Show a, Eq a) => Environment a -> Declaration a -> TypeCheckM (Maybe (Name a,Ty a))
+typeCheckDec :: (Eq a) => Environment a -> Declaration a -> TypeCheckM (Maybe (Name a,Ty a))
 typeCheckDec env (TypeDeclaration info name ty) | isReservedTyName name = throwError ReservedBaseTyNameError
                                                 | otherwise = typeCheckTyDec env name ty --TODO typeCheckTyDec completeness
 
@@ -160,6 +161,8 @@ typeCheckDec _ _ = undefined --TODO!!
 --typeCheckDec TODO VarDecl
 --typeCheckDec TODO FunDecl
 
+
+--TODO was this maybe necessary???
 typeCheckTyDec :: Eq a => Environment a -> Name a -> Type a -> TypeCheckM (Maybe (Name a,Ty a))
 typeCheckTyDec env name (TVar _ n@(Name _ s)) | s == "int"    = return $ Just (name, TigInt)
                                               | s == "string" = return $ Just (name, TigString)
@@ -209,7 +212,17 @@ typeCheckE env (RecordInitExpr _ n rfields) = do
        return $ t
     _ -> throwError AssertTyError -- TODO TEST [tigerSrc| var x : int = rec { baz = 1 } |]
 
-typeCheckE _ v | traceTrick v = undefined
+typeCheckE env (LetExpr _ decs e) = do
+  env' <- typeCheckDecs env decs
+  ty <- typeCheckE env' e
+  return ty
+
+--TENTATIVE
+typeCheckE env (LValueExpr _ (LValueBase _ n)) = do
+  case typeLookup env n of
+    Just t -> return t
+    Nothing -> throwError $ InvalidLValueBaseNameError
+
 --TODO typeCheck EXPR(..)
 
 --TODO LetExpr creates a new scope for ty checking declarations

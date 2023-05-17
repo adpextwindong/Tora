@@ -126,11 +126,20 @@ tyStringLitProgExpr = testParse [tigerSrc| "foo" |]
 
 exprSeqEx = testParse [tigerSrc| (5; "foo") |]
 
+simpleLetExpr = testParse [tigerSrc| let var x := 5 in x end |]
+simpleLetProg = testParse [tigerSrc| var x := 5
+                                     var y := (let var x := "foo" in x end) |]
+
+invalidLValueBaseInLetExpr = testParse [tigerSrc| var y := (let var x := "foo" in z end) |]
+
 exprTests = TestList [
    validTyCheck "Simple nil expr" tyNilProgExpr
    ,validTyCheck "Simple int lit expr" tyIntLitProgExpr
    ,validTyCheck "Simple string lit expr" tyStringLitProgExpr
    ,validTyCheck "Simple Expr Seq" exprSeqEx
+   ,validTyCheck "Simple LetExpr" simpleLetExpr
+   ,validTyCheck "simple Let Prog" simpleLetProg
+   ,invalidTyCheck "Invalid LValueBase In Let Expr" InvalidLValueBaseNameError invalidLValueBaseInLetExpr
    --TODO
   ]
 
