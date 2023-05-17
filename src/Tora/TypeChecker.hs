@@ -197,6 +197,9 @@ typeCheckE :: Eq a => Env (Ty a) -> Expr a -> TypeCheckM (Ty a)
 typeCheckE _ (NilExpr _) = return TigNil
 typeCheckE _ (IntLitExpr _ _) = return TigInt
 typeCheckE _ (StringLitExpr _ _) = return TigString
+typeCheckE env (ExprSeq _ es) = do
+  tys <- mapM (typeCheckE env) es
+  return . head . reverse $ tys
 
 typeCheckE env (RecordInitExpr _ n rfields) = do
   case typeLookup env n of

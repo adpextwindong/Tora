@@ -124,10 +124,13 @@ tyNilProgExpr = testParse [tigerSrc| nil |]
 tyIntLitProgExpr = testParse [tigerSrc| 5 |]
 tyStringLitProgExpr = testParse [tigerSrc| "foo" |]
 
+exprSeqEx = testParse [tigerSrc| (5; "foo") |]
+
 exprTests = TestList [
    validTyCheck "Simple nil expr" tyNilProgExpr
    ,validTyCheck "Simple int lit expr" tyIntLitProgExpr
    ,validTyCheck "Simple string lit expr" tyStringLitProgExpr
+   ,validTyCheck "Simple Expr Seq" exprSeqEx
    --TODO
   ]
 

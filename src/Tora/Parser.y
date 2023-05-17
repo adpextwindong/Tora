@@ -436,11 +436,11 @@ testExprProgram = TestCase $ do
   assertBool "ProgExpr test" $ test output
 
 testExprSeqAndParens = TestCase $ do
-  let input = [tigerSrc| ( 5 ) |]
+  let input = [tigerSrc| ( 5; "foo" ) |]
   let output = testParse input
 
   let test = \case
-        (ProgExpr _ (ExprSeq _ [(IntLitExpr _ 5)])) -> True
+        (ProgExpr _ (ExprSeq _ [(IntLitExpr _ 5),(StringLitExpr _ "foo")])) -> True
         _ -> False
 
   assertBool "Paren Expr Test" $ test output
