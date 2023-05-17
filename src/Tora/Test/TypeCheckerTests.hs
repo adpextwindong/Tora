@@ -144,6 +144,13 @@ simpleIFEFailBody = testParse [tigerSrc| if 5 then "foo" else 3 |]
 
 simpleIFETigNoValue = testParse [tigerSrc| if 5 then () else (let var x := "foo" in () end) |]
 
+simpleWhileExpr = testParse [tigerSrc| while 5 do () |]
+simpleBadWhileExprCond = testParse [tigerSrc| while "foo" do () |]
+
+whileExprLong = testParse [tigerSrc| while (let var x : int := 5 in 5 end) do (let var z := "quux" in () end) |]
+
+whileMustProduceNothingExpr = testParse [tigerSrc| if 5 then (while 5 do ()) |]
+
 exprTests = TestList [
    validTyCheck "Simple nil expr" tyNilProgExpr
    ,validTyCheck "Simple int lit expr" tyIntLitProgExpr
@@ -160,6 +167,10 @@ exprTests = TestList [
    ,invalidTyCheck "Simple IFE Head Fail" InvalidIFECondTypeError simpleIFEFailHead
    ,invalidTyCheck "Simple IFE Body Fail" InvalidIFEBodyTypeError simpleIFEFailBody
    ,validTyCheck "Simple IFE TigNoValue" simpleIFETigNoValue
+   ,validTyCheck "Simple While Expr" simpleWhileExpr
+   ,invalidTyCheck "Bad While Expr Cond" InvalidWhileCondTypeError simpleBadWhileExprCond
+   ,validTyCheck "Long While Expr" whileExprLong
+   ,validTyCheck "While Produces Nothing Type" whileMustProduceNothingExpr
    --TODO
   ]
 

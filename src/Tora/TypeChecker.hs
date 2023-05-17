@@ -46,6 +46,8 @@ data TypeError = AssertTyError
                | IfThenTypeMismatchError
                | InvalidIFECondTypeError
                | InvalidIFEBodyTypeError
+               | InvalidWhileCondTypeError
+               | InvalidWhileBodyTypeError
                deriving (Show, Eq)
 
 data EnvEntry t = VarEntry t
@@ -250,6 +252,17 @@ typeCheckE env (IFThenElseExpr _ cond e e') = do
       else throwError InvalidIFEBodyTypeError
     _ -> throwError InvalidIFECondTypeError
 
+typeCheckE env (WhileExpr _ cond e) = do
+  tcond <- typeCheckE env cond
+  case tcond of
+    TigInt -> do
+      t <- typeCheckE env e
+      case t of
+        TigNoValue -> return TigNoValue
+        _ -> throwError InvalidWhileBodyTypeError
+    _ -> throwError InvalidWhileCondTypeError
+
+typeCheckE _ w | traceTrick w = undefined
 --TODO typeCheck EXPR(..)
 
 --TODO LetExpr creates a new scope for ty checking declarations
