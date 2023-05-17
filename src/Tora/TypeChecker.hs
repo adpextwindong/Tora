@@ -44,6 +44,8 @@ data TypeError = AssertTyError
                | UndeclaredRecordTypeUsageError
                | InvalidLValueBaseNameError
                | IfThenTypeMismatchError
+               | InvalidIFECondTypeError
+               | InvalidIFEBodyTypeError
                deriving (Show, Eq)
 
 data EnvEntry t = VarEntry t
@@ -236,6 +238,17 @@ typeCheckE env (IFThenExpr _ e e') = do
         TigNoValue -> return TigNoValue
         _ -> throwError IfThenTypeMismatchError
     _ -> throwError IfThenTypeMismatchError
+
+typeCheckE env (IFThenElseExpr _ cond e e') = do
+  thead <- typeCheckE env cond
+  case thead of
+    TigInt -> do
+      t <- typeCheckE env e
+      t' <- typeCheckE env e'
+      if t == t'
+      then return t
+      else throwError InvalidIFEBodyTypeError
+    _ -> throwError InvalidIFECondTypeError
 
 --TODO typeCheck EXPR(..)
 

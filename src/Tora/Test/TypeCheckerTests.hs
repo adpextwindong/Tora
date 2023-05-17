@@ -136,6 +136,13 @@ simpleNoValueExpr = testParse [tigerSrc| () |]
 simplestIFTExpr = testParse [tigerSrc| if 5 then () |]
 iftLETExpr = testParse [tigerSrc| if 5 then (let var x := 5 in 5; () end) |]
 
+simpleIFEExpr = testParse [tigerSrc| if 5 then "foo" else "bar" |]
+
+simpleIFEFailHead = testParse [tigerSrc| if "foo" then 5 else 6 |]
+simpleIFEFailBody = testParse [tigerSrc| if 5 then "foo" else 3 |]
+
+simpleIFETigNoValue = testParse [tigerSrc| if 5 then () else (let var x := "foo" in () end) |]
+
 exprTests = TestList [
    validTyCheck "Simple nil expr" tyNilProgExpr
    ,validTyCheck "Simple int lit expr" tyIntLitProgExpr
@@ -147,6 +154,10 @@ exprTests = TestList [
    ,validTyCheck "Simple Unit Value Expr" simpleNoValueExpr
    ,validTyCheck "Simplest IFT Expr" simplestIFTExpr
    ,validTyCheck "IFT Let Expr" iftLETExpr
+   ,validTyCheck "Simple IFEExpr" simpleIFEExpr
+   ,invalidTyCheck "Simple IFE Head Fail" InvalidIFECondTypeError simpleIFEFailHead
+   ,invalidTyCheck "Simple IFE Body Fail" InvalidIFEBodyTypeError simpleIFEFailBody
+   ,validTyCheck "Simple IFE TigNoValue" simpleIFETigNoValue
    --TODO
   ]
 
