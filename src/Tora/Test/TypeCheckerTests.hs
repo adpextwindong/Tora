@@ -132,6 +132,10 @@ simpleLetProg = testParse [tigerSrc| var x := 5
 
 invalidLValueBaseInLetExpr = testParse [tigerSrc| var y := (let var x := "foo" in z end) |]
 
+simpleNoValueExpr = testParse [tigerSrc| () |]
+simplestIFTExpr = testParse [tigerSrc| if 5 then () |]
+iftLETExpr = testParse [tigerSrc| if 5 then (let var x := 5 in 5; () end) |]
+
 exprTests = TestList [
    validTyCheck "Simple nil expr" tyNilProgExpr
    ,validTyCheck "Simple int lit expr" tyIntLitProgExpr
@@ -140,6 +144,9 @@ exprTests = TestList [
    ,validTyCheck "Simple LetExpr" simpleLetExpr
    ,validTyCheck "simple Let Prog" simpleLetProg
    ,invalidTyCheck "Invalid LValueBase In Let Expr" InvalidLValueBaseNameError invalidLValueBaseInLetExpr
+   ,validTyCheck "Simple Unit Value Expr" simpleNoValueExpr
+   ,validTyCheck "Simplest IFT Expr" simplestIFTExpr
+   ,validTyCheck "IFT Let Expr" iftLETExpr
    --TODO
   ]
 

@@ -23,6 +23,7 @@ data Ty a = TigInt
           | TigArray (Ty a) (Name a)
           | TigNil
           | TigUnit
+          | TigNoValue
   deriving Eq
 
 data TypeError = AssertTyError
@@ -42,6 +43,7 @@ data TypeError = AssertTyError
                | InvalidLValueNameError
                | UndeclaredRecordTypeUsageError
                | InvalidLValueBaseNameError
+               | IfThenTypeMismatchError
                deriving (Show, Eq)
 
 data EnvEntry t = VarEntry t
@@ -222,6 +224,18 @@ typeCheckE env (LValueExpr _ (LValueBase _ n)) = do
   case typeLookup env n of
     Just t -> return t
     Nothing -> throwError $ InvalidLValueBaseNameError
+
+typeCheckE _ (NoValueExpr _) = return TigNoValue
+
+typeCheckE env (IFThenExpr _ e e') = do
+  t <- typeCheckE env e
+  case t of
+    TigInt -> do
+      t' <- typeCheckE env e'
+      case t' of
+        TigNoValue -> return TigNoValue
+        _ -> throwError IfThenTypeMismatchError
+    _ -> throwError IfThenTypeMismatchError
 
 --TODO typeCheck EXPR(..)
 
