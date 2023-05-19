@@ -10,7 +10,7 @@ import Tora.TypeChecker
 
 import Test.HUnit
 import Tora.Parser (testParse)
-import Tora.TypeChecker (TypeError(TypeAliasMismatchError))
+import Tora.TypeChecker
 
 reservedTyNameTestInt = testParse [tigerSrc| type int = Nil |]
 reservedTyNameTestString = testParse [tigerSrc| type string = Nil |]
@@ -102,7 +102,7 @@ varDeclTests = TestList [
   untypedVarDeclAssignedAsNilTest
   ,validTyCheck "Int Ty Var Decl" tyIntVarTypedSimple
   ,validTyCheck "String Ty Var Decl" tyStringVarTypedSimple
-  ,invalidTyCheck "Var Expr Type Decl Mismatch" TypeAliasMismatchError $ testParse
+  ,invalidTyCheck "Var Expr Type Decl Mismatch" TypeLiteralMismatchError $ testParse
     [tigerSrc| var x : string := 5|]
 
    ,invalidTyCheck "Type Alias Mismatch Base Int" AssertTyError $ testParse
@@ -116,7 +116,7 @@ varDeclTests = TestList [
   ,invalidTyCheck "Split Typed Var Record Var Decl Long Broken" RecordExprTyFieldMismatch varDeclSplitTypedRecordLongBroken
   ,invalidTyCheck "Rec Type Var Decl with no type decl" AnonymousTypeUsageError varDeclNoTypeDeclRec
   ,invalidTyCheck "Mismatch Rec Type Var Decl" VarDeclTypeMismatchError varDeclMismatchRecord
-  ,invalidTyCheck "Rec Against not rec type mismatch" TypeAliasMismatchError varDeclRecTypeAliasMismatch
+  ,invalidTyCheck "Rec Against not rec type mismatch" TypeLiteralMismatchError varDeclRecTypeAliasMismatch
   ,invalidTyCheck "Undeclared Rec Type Var Decl" VarDeclTypeMismatchError undeclaredRecTypeVarDecl
   ]
 
@@ -162,9 +162,7 @@ exprTests = TestList [
    ,validTyCheck "Simple int lit expr" tyIntLitProgExpr
    ,validTyCheck "Simple string lit expr" tyStringLitProgExpr
    ,validTyCheck "Simple Expr Seq" exprSeqEx
-   ,validTyCheck "Simple LetExpr" simpleLetExpr
-   ,validTyCheck "simple Let Prog" simpleLetProg
-   ,invalidTyCheck "Invalid LValueBase In Let Expr" InvalidLValueBaseNameError invalidLValueBaseInLetExpr
+
    ,validTyCheck "Simple Unit Value Expr" simpleNoValueExpr
    ,validTyCheck "Simplest IFT Expr" simplestIFTExpr
    ,validTyCheck "IFT Let Expr" iftLETExpr
@@ -177,6 +175,11 @@ exprTests = TestList [
    ,invalidTyCheck "Bad While Expr Cond" InvalidWhileCondTypeError simpleBadWhileExprCond
    ,validTyCheck "Long While Expr" whileExprLong
    ,validTyCheck "While Produces Nothing Type" whileMustProduceNothingExpr
+
+
+   ,validTyCheck "Simple LetExpr" simpleLetExpr
+   ,validTyCheck "simple Let Prog" simpleLetProg
+   ,invalidTyCheck "Invalid LValueBase In Let Expr" InvalidLValueBaseNameError invalidLValueBaseInLetExpr
 
    ,validTyCheck "For Body Simple Expr" forBodySimpleExpr
    ,validTyCheck "For Body Test Binding" forBodyTestBinding
