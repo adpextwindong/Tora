@@ -18,6 +18,7 @@ data Env t = EmptyEnv
 
 type Environment a = Env (Ty a)
 
+--Used to introduce a new lexical scope
 mkScope :: Environment a -> Environment a
 mkScope env = LexicalScope M.empty M.empty env
 

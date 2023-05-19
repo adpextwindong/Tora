@@ -157,6 +157,26 @@ forBodyBadHeadLeft = testParse [tigerSrc| for i := "foo" to 10 do () |]
 forBodyBadHeadRight = testParse [tigerSrc| for i := 0 to "foo" do () |]
 forBodyMustReturnNothing = testParse [tigerSrc| if 1 then (for x := 0 to 10 do ()) |]
 
+letExprCanShadow = testParse [tigerSrc| var x := "foo"
+                                        var y := (let var x := 5 in x end) |]
+
+letExprCanShadow' = testParse [tigerSrc| var y := (let var x := 5 in x end)
+                                         var x := "foo" |]
+
+forBodyCanShadow = testParse [tigerSrc| var x := "foo"
+                                        var y : int := (for x := 0 to 10 do (); 5) |]
+
+forBodyCanShadow' = testParse [tigerSrc| var y : int := (for x := 0 to 10 do (); 5)
+                                         var x := "foo" |]
+
+
+shadowingTests = TestLabel "Shadowing Tests" $ TestList [
+    validTyCheck "Let Expr Can Shadow" letExprCanShadow
+    ,validTyCheck "Let Expr Can Shadow Reverse" letExprCanShadow'
+    ,validTyCheck "For Body Can Shadow" forBodyCanShadow
+    ,validTyCheck "For Body Can Shadow Reverse" forBodyCanShadow'
+  ]
+
 exprTests = TestList [
    validTyCheck "Simple nil expr" tyNilProgExpr
    ,validTyCheck "Simple int lit expr" tyIntLitProgExpr
@@ -193,6 +213,7 @@ astTests = TestList [
   TestLabel "Type Declaration Tests" typeDeclTests
   ,TestLabel "Var Decl Tests" varDeclTests
   ,TestLabel "Expr Tests" exprTests
+  ,shadowingTests
   --TODO
   ]
 
