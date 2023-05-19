@@ -177,6 +177,9 @@ shadowingTests = TestLabel "Shadowing Tests" $ TestList [
     ,validTyCheck "For Body Can Shadow Reverse" forBodyCanShadow'
   ]
 
+simpleBreakWExpr = testParse [tigerSrc| while 5 do (break) |]
+--TODO invalid test for break not contained in while/for
+
 exprTests = TestList [
    validTyCheck "Simple nil expr" tyNilProgExpr
    ,validTyCheck "Simple int lit expr" tyIntLitProgExpr
@@ -195,6 +198,7 @@ exprTests = TestList [
    ,invalidTyCheck "Bad While Expr Cond" InvalidWhileCondTypeError simpleBadWhileExprCond
    ,validTyCheck "Long While Expr" whileExprLong
    ,validTyCheck "While Produces Nothing Type" whileMustProduceNothingExpr
+   ,validTyCheck "Break Expr Simple" simpleBreakWExpr
 
 
    ,validTyCheck "Simple LetExpr" simpleLetExpr

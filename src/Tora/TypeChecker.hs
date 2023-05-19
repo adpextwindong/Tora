@@ -247,8 +247,6 @@ typeCheckE env (ForExpr lxr_range forVarName forVarEStart forVarEEnd body) = do
 
   when (tstart /= TigInt || tend /= TigInt) $ throwError InvalidForStartEndTypeError
 
-  --HACK HUGE PITFALL this distinction between var scope and type scope is brittle as is rn
-  --TODO scope tests
   let env' = insertVarScopeEnv (mkScope env) forVarName TigInt
   tbody <- typeCheckE env' body
 
@@ -256,6 +254,8 @@ typeCheckE env (ForExpr lxr_range forVarName forVarEStart forVarEEnd body) = do
     TigNoValue -> return TigNoValue
     _ -> throwError InvalidForBodyTypeError
 
+--TODO check that break is contained by for/while, might be another pass idk
+typeCheckE _ (BreakExpr _) = return $ TigNoValue
 
 typeCheckE _ w | traceTrick w = undefined
 --TODO typeCheck EXPR(..)
