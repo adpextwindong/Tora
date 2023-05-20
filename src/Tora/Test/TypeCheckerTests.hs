@@ -180,6 +180,46 @@ shadowingTests = TestLabel "Shadowing Tests" $ TestList [
 simpleBreakWExpr = testParse [tigerSrc| while 5 do (break) |]
 --TODO invalid test for break not contained in while/for
 
+simpleFn = testParse [tigerSrc| function id(x : int) = x |]
+simpleFnTyped = testParse [tigerSrc| function id(x : int) : int = x |]
+
+simpleRecursiveFn = testParse [tigerSrc| function foo(x : int) : int =
+                                           if x = 0
+                                           then 1 + foo(x - 1)
+                                           else x |]
+
+--Making recursive and mutually recursive fn's labeled with their type signatures will simplyfy things
+recursiveFnMustBeTyped = testParse[tigerSrc| function foo(x : int) =
+                                               if x = 0
+                                               then 1 + foo(x - 1)
+                                               else x |]
+
+mutuallyRecursiveFnSimple = testParse [tigerSrc| function foo(x : int) : int =
+                                                  if x = 1 then 2 else foo(x - 1) + bar(1)
+
+                                                 function bar(x: int) : int =
+                                                   if x = 1
+                                                   then 0
+                                                   else foo(1) |]
+
+mutuallyRecursiveFnMustBeTyped = testParse [tigerSrc| function foo(x : int) =
+                                                  if x = 1 then 2 else foo(x - 1) + bar(1)
+
+                                                 function bar(x: int) =
+                                                   if x = 1
+                                                   then 0
+                                                   else foo(1) |]
+
+
+fnTests = TestLabel "Function Tests" $ TestList [
+    validTyCheck "Simple Untyped Function Decl" simpleFn
+    ,validTyCheck "Simple Typed Function Decl" simpleFnTyped
+    ,validTyCheck "Simple Recrusive Fn Decl" simpleRecursiveFn
+    ,invalidTyCheck "Recursive Functions must be typed" MissingFunctionNameError recursiveFnMustBeTyped
+    --,validTyCheck "Simple Mutually Recursive Fn" mutuallyRecursiveFnSimple TODO
+    ,invalidTyCheck "Mutually Recursive Functions must be typed" MissingFunctionNameError mutuallyRecursiveFnMustBeTyped
+  ]
+
 exprTests = TestList [
    validTyCheck "Simple nil expr" tyNilProgExpr
    ,validTyCheck "Simple int lit expr" tyIntLitProgExpr
@@ -218,6 +258,7 @@ astTests = TestList [
   ,TestLabel "Var Decl Tests" varDeclTests
   ,TestLabel "Expr Tests" exprTests
   ,shadowingTests
+  ,fnTests
   --TODO
   ]
 

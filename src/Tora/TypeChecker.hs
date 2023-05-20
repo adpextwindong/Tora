@@ -1,5 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE LambdaCase #-}
+
 module Tora.TypeChecker where
 
 import qualified Data.Set as S
@@ -8,9 +10,10 @@ import Tora.AST
 
 --TODO clean env handling shit up
 import Tora.Environment (Environment, Env(..), EnvEntry(..),
-  varLocalLookup, typeLocalLookup, -- Just used for local shadowing checks
+  varLocalLookup, funLocalLookup , typeLocalLookup, -- Just used for local shadowing checks
   insertVarScopeEnv, insertTyScopeEnv, -- This handling in particular
-  typeLookup, varLookup,
+  insertFunScopeEnv,
+  typeLookup, varLookup, funLookup,
   mkScope)
 
 import Data.Maybe (isNothing)
@@ -48,6 +51,12 @@ data TypeError = AssertTyError
                | VarFunDecShadowError
                | TypeDecShadowError
                | TypeLiteralMismatchError
+               | FnBodyHeadTypeMismatchError
+               | BinOpTypeMismatch
+               | MissingFunctionNameError --TODO test
+               | CallingVarAsFunError --TODO test
+               | FunCallArgTypeMismatchError --TODO test
+
                deriving (Show, Eq)
 
 assertTyE :: (Show a, Eq a) => Environment a -> Expr a -> Ty a -> TypeCheckM ()
@@ -64,33 +73,44 @@ typeCheckProg :: (Show a, Eq a) => Program a -> IO (Either TypeError ())
 typeCheckProg (ProgExpr _ e) = runExceptT $ void $ typeCheckE EmptyEnv e
 typeCheckProg (ProgDecls _ decs) = runExceptT $ void $ typeCheckDecs EmptyEnv decs
 
+consecTypedFns ds = takeWhile (\case { FunDeclaration _ _ _ (Just t) _ -> True; _ -> False }) ds
+
 typeCheckDecs :: (Show a, Eq a) => Environment a -> [Declaration a] -> TypeCheckM (Env (Ty a))
 typeCheckDecs env [] = return env
+typeCheckDecs env ds | (length (consecTypedFns ds)) > 1 = undefined
+  --TODO mutually recursive typed functions
+  --TODO collect heads and put them into env before checking bodies
 typeCheckDecs env (d:ds) = do
-  (name, ty) <- typeCheckDec env d
 
   env' <- case d of
     TypeDeclaration _ _ _ -> do --insert into typescope
+      (name, ty) <- typeCheckDec env d
       if isNothing (typeLocalLookup env name)
       then return $ insertTyScopeEnv env name ty
       else throwError TypeDecShadowError
 
     VarDeclaration _ _ _ _ -> do --insert into varFun scope
+      (name, ty) <- typeCheckDec env d
       if isNothing (varLocalLookup env name)
       then return $ insertVarScopeEnv env name ty
       else throwError VarFunDecShadowError
 
-    FunDeclaration _ _ _ _ _ -> undefined
+    FunDeclaration _ fn argFullTypes mt _ -> do
+      argstys <- mapM ((fmap snd) . (lookupArgTyField env)) argFullTypes
 
+      env'' <- case mt of
+                    Nothing -> return env
+                    Just fulltype -> do
+                      ty <- lookupArgTy env fulltype
+                      return $ insertFunScopeEnv env fn argstys ty
 
-  {-
-  env' <- case mTy of
-            Nothing -> return env
-                                --Check Var Decl hasn't been made before
-            Just (name, ty) -> if isNothing (varLocalLookup env name)
-                               then return $ insertTyScopeEnv env name ty
-                               else throwError VarTyDecShadowError
-  -}
+      if isNothing (funLocalLookup env fn) --TODO fun shadowing var/fun test
+      then
+        do
+          (name, ty) <- typeCheckDec env'' d
+          return $ insertFunScopeEnv env'' fn argstys ty
+      else throwError VarFunDecShadowError
+
   typeCheckDecs env' ds
 
 typeCheckDec :: (Show a, Eq a) => Environment a -> Declaration a -> TypeCheckM (Name a,Ty a)
@@ -139,10 +159,49 @@ typeCheckDec env (VarDeclaration _ name (Just (TVar _ tn@(Name _ _))) e) = do --
       assertTyE env e t'
       return $ (name, t')
 
+
+typeCheckDec env (FunDeclaration _ name fields Nothing e) = do --Untyped function
+  env' <- mkFnScope env fields
+  t <- typeCheckE env' e
+  return (name, t)
+
+typeCheckDec env (FunDeclaration _ name fields (Just t) e) = do
+  t' <- lookupArgTy env t
+  env' <- mkFnScope env fields
+  t'' <- typeCheckE env' e
+  if t' /= t''
+  then throwError FnBodyHeadTypeMismatchError
+  else return (name, t')
+
 --TODO more Type cases
 typeCheckDec env decl | traceTrick decl = undefined
 
 typeCheckDec _ _ = undefined --TODO!!
+
+lookupArgTyField :: Environment a -> TyField a -> TypeCheckM (Name a, Ty a)
+lookupArgTyField env (TyField _ n t) = do
+  ty <- lookupArgTy env t
+  return (n, ty)
+
+--TODO rename this, this just resolves Types to Tys
+lookupArgTy :: Environment a -> Type a -> TypeCheckM (Ty a)
+lookupArgTy env (TVar _ n@(Name _ s)) | s == "int"    = return TigInt
+                                      | s == "string" = return TigString
+                                      | otherwise = case typeLookup env n of
+                                                      Nothing -> throwError MissingTypeNameAliasingError
+                                                      Just t -> return t
+lookupArgTy _ _ = undefined --TODO
+
+mkFnScope :: Environment a -> [TyField a] -> TypeCheckM (Environment a)
+mkFnScope env fields = do
+  let ins (n,t) e = insertVarScopeEnv e n t
+  fieldsTyP <- forM fields $ do
+    (\(TyField _ n fulltype) -> do
+      t <- lookupArgTy env fulltype
+      return (n,t))
+  return $ foldr ins (mkScope env) fieldsTyP
+
+
 --typeCheckDec env (VarDeclaration _ name (Just t) (NilExpr _)) = TODO! CHECK T FOR RECORD TYPE SEE PAGE 516 EX1
 --typeCheckDec env (VarDeclaration _ name (Just t) e) = TODO! CHECK T AGAINST ty of e, typeToTy for eq'ing
 --
@@ -152,11 +211,9 @@ typeCheckDec _ _ = undefined --TODO!!
 
 --TODO was this maybe necessary???
 typeCheckTyDec :: Eq a => Environment a -> Name a -> Type a -> TypeCheckM (Name a,Ty a)
-typeCheckTyDec env name (TVar _ n@(Name _ s)) | s == "int"    = return $ (name, TigInt)
-                                              | s == "string" = return $ (name, TigString)
-                                              | otherwise = case typeLookup env n of
-                                                              Nothing -> throwError MissingTypeNameAliasingError
-                                                              Just t -> return $ (name, t)
+typeCheckTyDec env name t@(TVar _ _) = do
+  t' <- lookupArgTy env t
+  return (name, t')
 
 typeCheckTyDec env name (TRecord _ fields) = do
   tys <- mapM (typeCheckField env) fields
@@ -257,12 +314,31 @@ typeCheckE env (ForExpr lxr_range forVarName forVarEStart forVarEEnd body) = do
 --TODO check that break is contained by for/while, might be another pass idk
 typeCheckE _ (BreakExpr _) = return $ TigNoValue
 
+typeCheckE env (BinOpExpr _ e op e') = do
+  t <- typeCheckE env e
+  t' <- typeCheckE env e'
+  if t /= t'
+  then throwError BinOpTypeMismatch
+  else checkBinOp op t t' --TODO operator handling
+-- TODO FunCallExpr, FunDecl. We need mutually recursive typechecking for functions ideally
+
+typeCheckE env (FunCallExpr _ fn args) = do
+  case funLookup env fn of
+    Nothing -> throwError MissingFunctionNameError --TODO test
+    Just (VarEntry _) -> throwError CallingVarAsFunError --TODO test
+    Just (FunEntry argts t) -> do
+      tys <- mapM (typeCheckE env) args
+      if tys == argts
+      then return t
+      else throwError FunCallArgTypeMismatchError
+
 typeCheckE _ w | traceTrick w = undefined
 --TODO typeCheck EXPR(..)
 
---TODO LetExpr creates a new scope for ty checking declarations
-
---TODO make sure this gets used.
+checkBinOp (PlusOp _) TigInt TigInt = return TigInt
+checkBinOp (MinusOp _) TigInt TigInt = return TigInt
+checkBinOp (EqualOp _) TigInt TigInt = return TigInt
+checkBinOp _ t t' = undefined --TODO
 
 checkMatchingRecConStructure :: (Show a, Eq a) => Environment a -> [(Name a, Ty a)] -> [(Name a, Expr a)] -> TypeCheckM ()
 checkMatchingRecConStructure env definitionTys exprFields =

@@ -32,6 +32,11 @@ varLocalLookup :: Env b -> Name a -> Maybe (EnvEntry b)
 varLocalLookup EmptyEnv n = Nothing
 varLocalLookup (LexicalScope s _ _) (Name _ n) = M.lookup n s
 
+funLocalLookup :: Env b -> Name a -> Maybe (EnvEntry b)
+funLocalLookup = varLocalLookup
+
+funLookup = varLookup
+
 typeLocalLookup :: Env b -> Name a -> Maybe b
 typeLocalLookup EmptyEnv n = Nothing
 typeLocalLookup (LexicalScope _ tS _) (Name _ n) = M.lookup n tS
@@ -41,7 +46,10 @@ insertVarScopeEnv EmptyEnv (Name _ n) t = LexicalScope (M.singleton n (VarEntry 
 insertVarScopeEnv (LexicalScope vE tS p) (Name _ n) t = LexicalScope vE' tS p
   where vE' = M.insert n (VarEntry t) vE
 
-insertFunScopeEnv = undefined
+insertFunScopeEnv :: Environment a -> Name a -> [Ty a] -> Ty a -> Environment a
+insertFunScopeEnv EmptyEnv (Name _ n) argts t = LexicalScope (M.singleton n (FunEntry argts t)) M.empty EmptyEnv
+insertFunScopeEnv (LexicalScope vE tS p) (Name _ n) argsts t = LexicalScope vE' tS p
+  where vE' = M.insert n (FunEntry argsts t) vE
 
 
 insertTyScopeEnv :: Environment a -> Name a -> Ty a -> Environment a
