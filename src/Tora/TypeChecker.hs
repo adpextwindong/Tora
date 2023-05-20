@@ -257,31 +257,15 @@ typeCheckE :: (Show a, Eq a) => Env (Ty a) -> Expr a -> TypeCheckM (Ty a)
 typeCheckE _ (NilExpr _) = return TigNil
 typeCheckE _ (IntLitExpr _ _) = return TigInt
 typeCheckE _ (StringLitExpr _ _) = return TigString
+
 typeCheckE env (ExprSeq _ es) = do
   tys <- mapM (typeCheckE env) es
   return . head . reverse $ tys
-
-typeCheckE env (RecordInitExpr _ n rfields) = do
-  case typeLookup env n of
-    Nothing -> throwError UndeclaredRecordTypeUsageError -- TODO TEST [tigerSrc| var x = foo { val = 1 } |]
-    Just (t@(TigRecord tfields unid)) -> do
-       checkMatchingRecConStructure env tfields rfields
-       return $ t
-    _ -> throwError AssertTyError -- TODO TEST [tigerSrc| var x : int = rec { baz = 1 } |]
 
 typeCheckE env (LetExpr _ decs e) = do
   env' <- typeCheckDecs (mkScope env) decs --TODO scope tests
   ty <- typeCheckE env' e
   return ty
-
---TENTATIVE
-typeCheckE env (LValueExpr _ (LValueBase _ n)) = do
-  case varLookup env n of
-    Just (VarEntry t) -> return t
-    Just (FunEntry _ t) -> return t
-    Nothing -> throwError $ InvalidLValueBaseNameError
-
-typeCheckE _ (NoValueExpr _) = return TigNoValue
 
 typeCheckE env (IFThenExpr _ e e') = do
   t <- typeCheckE env e
@@ -331,13 +315,6 @@ typeCheckE env (ForExpr lxr_range forVarName forVarEStart forVarEEnd body) = do
 --TODO check that break is contained by for/while, might be another pass idk
 typeCheckE _ (BreakExpr _) = return $ TigNoValue
 
-typeCheckE env (BinOpExpr _ e op e') = do
-  t <- typeCheckE env e
-  t' <- typeCheckE env e'
-  if t /= t'
-  then throwError BinOpTypeMismatch
-  else checkBinOp op t t' --TODO operator handling
-
 typeCheckE env (FunCallExpr _ fn args) = do
   case funLookup env fn of
     Nothing -> throwError MissingFunctionNameError --TODO test
@@ -347,6 +324,42 @@ typeCheckE env (FunCallExpr _ fn args) = do
       if tys == argts
       then return t
       else throwError FunCallArgTypeMismatchError
+
+typeCheckE env (ArrayInitExpr _ typename initCount initValue) = undefined --TODO
+  --typeToTy tn
+  --Check initCount : int
+  --typeCheckE env initValue
+  --return TigArray ty
+
+typeCheckE env (RecordInitExpr _ n rfields) = do
+  case typeLookup env n of
+    Nothing -> throwError UndeclaredRecordTypeUsageError -- TODO TEST [tigerSrc| var x = foo { val = 1 } |]
+    Just (t@(TigRecord tfields unid)) -> do
+       checkMatchingRecConStructure env tfields rfields
+       return $ t
+    _ -> throwError AssertTyError -- TODO TEST [tigerSrc| var x : int = rec { baz = 1 } |]
+
+typeCheckE _ (NoValueExpr _) = return TigNoValue
+
+typeCheckE env (BinOpExpr _ e op e') = do --TODO
+  t <- typeCheckE env e
+  t' <- typeCheckE env e'
+  if t /= t'
+  then throwError BinOpTypeMismatch
+  else checkBinOp op t t' --TODO operator handling
+
+typeCheckE env (UnaryNegate _ e) = undefined --TODO
+
+--TENTATIVE
+typeCheckE env (LValueExpr _ (LValueBase _ n)) = do
+  case varLookup env n of
+    Just (VarEntry t) -> return t
+    Just (FunEntry _ t) -> return t
+    Nothing -> throwError $ InvalidLValueBaseNameError
+
+typeCheckE env (LValueExpr _ _) = undefined -- TODO
+
+typeCheckE env (AssignmentExpr _ lvalue e) = undefined --TODO
 
 typeCheckE _ w | traceTrick w = undefined
 --TODO typeCheck EXPR(..)
