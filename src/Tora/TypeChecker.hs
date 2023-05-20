@@ -77,11 +77,29 @@ consecTypedFns ds = takeWhile (\case { FunDeclaration _ _ _ (Just t) _ -> True; 
 
 typeCheckDecs :: (Show a, Eq a) => Environment a -> [Declaration a] -> TypeCheckM (Env (Ty a))
 typeCheckDecs env [] = return env
-typeCheckDecs env ds | (length (consecTypedFns ds)) > 1 = undefined
-  --TODO mutually recursive typed functions
-  --TODO collect heads and put them into env before checking bodies
-typeCheckDecs env (d:ds) = do
+typeCheckDecs env ds | (length (consecTypedFns ds)) > 1 = do
+  let typedfns = consecTypedFns ds
+      restdecs = drop (length typedfns) ds
+      ins (fn, ats, t) e = insertFunScopeEnv e fn ats t
 
+  heads <- forM typedfns
+    (\(FunDeclaration _ fn argFullTypes (Just fulltype) _) -> do
+      argstys <- mapM ((fmap snd) . (lookupArgTyField env)) argFullTypes
+      ty <- lookupArgTy env fulltype
+
+      if isNothing (funLocalLookup env fn)
+      then return $ (fn, argstys, ty)
+      else throwError VarFunDecShadowError
+    )
+
+  let env' = foldr ins env heads
+
+  forM_ typedfns
+    (\f@(FunDeclaration _ fn argFullTypes (Just fulltype) _) -> typeCheckDec env' f)
+
+  typeCheckDecs env' restdecs
+
+typeCheckDecs env (d:ds) = do
   env' <- case d of
     TypeDeclaration _ _ _ -> do --insert into typescope
       (name, ty) <- typeCheckDec env d
@@ -115,7 +133,7 @@ typeCheckDecs env (d:ds) = do
 
 typeCheckDec :: (Show a, Eq a) => Environment a -> Declaration a -> TypeCheckM (Name a,Ty a)
 typeCheckDec env (TypeDeclaration info name ty) | isReservedTyName name = throwError ReservedBaseTyNameError
-                                                | otherwise = typeCheckTyDec env name ty --TODO typeCheckTyDec completeness
+                                                | otherwise = typeCheckTyDec env name ty
 
 typeCheckDec env (VarDeclaration _ name Nothing (NilExpr _)) = throwError RawVarNilDeclError
 typeCheckDec env (VarDeclaration _ name Nothing e) = do
@@ -183,7 +201,7 @@ lookupArgTyField env (TyField _ n t) = do
   ty <- lookupArgTy env t
   return (n, ty)
 
---TODO rename this, this just resolves Types to Tys
+--TODO rename this to typeToTy, this just resolves Types to Tys in an environment
 lookupArgTy :: Environment a -> Type a -> TypeCheckM (Ty a)
 lookupArgTy env (TVar _ n@(Name _ s)) | s == "int"    = return TigInt
                                       | s == "string" = return TigString
@@ -209,7 +227,6 @@ mkFnScope env fields = do
 --typeCheckDec TODO FunDecl
 
 
---TODO was this maybe necessary???
 typeCheckTyDec :: Eq a => Environment a -> Name a -> Type a -> TypeCheckM (Name a,Ty a)
 typeCheckTyDec env name t@(TVar _ _) = do
   t' <- lookupArgTy env t
@@ -320,7 +337,6 @@ typeCheckE env (BinOpExpr _ e op e') = do
   if t /= t'
   then throwError BinOpTypeMismatch
   else checkBinOp op t t' --TODO operator handling
--- TODO FunCallExpr, FunDecl. We need mutually recursive typechecking for functions ideally
 
 typeCheckE env (FunCallExpr _ fn args) = do
   case funLookup env fn of

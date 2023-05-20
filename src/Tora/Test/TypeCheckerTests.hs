@@ -216,7 +216,7 @@ fnTests = TestLabel "Function Tests" $ TestList [
     ,validTyCheck "Simple Typed Function Decl" simpleFnTyped
     ,validTyCheck "Simple Recrusive Fn Decl" simpleRecursiveFn
     ,invalidTyCheck "Recursive Functions must be typed" MissingFunctionNameError recursiveFnMustBeTyped
-    --,validTyCheck "Simple Mutually Recursive Fn" mutuallyRecursiveFnSimple TODO
+    ,validTyCheck "Simple Mutually Recursive Fn" mutuallyRecursiveFnSimple
     ,invalidTyCheck "Mutually Recursive Functions must be typed" MissingFunctionNameError mutuallyRecursiveFnMustBeTyped
   ]
 
