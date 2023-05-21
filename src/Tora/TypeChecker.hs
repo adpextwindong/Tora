@@ -85,7 +85,7 @@ typeCheckDecs env ds | (length (consecTypedFns ds)) > 1 = do
   heads <- forM typedfns
     (\(FunDeclaration _ fn argFullTypes (Just fulltype) _) -> do
       argstys <- mapM ((fmap snd) . (lookupArgTyField env)) argFullTypes
-      ty <- lookupArgTy env fulltype
+      ty <- typeToTy env fulltype
 
       if isNothing (funLocalLookup env fn)
       then return $ (fn, argstys, ty)
@@ -119,7 +119,7 @@ typeCheckDecs env (d:ds) = do
       env'' <- case mt of
                     Nothing -> return env
                     Just fulltype -> do
-                      ty <- lookupArgTy env fulltype
+                      ty <- typeToTy env fulltype
                       return $ insertFunScopeEnv env fn argstys ty
 
       if isNothing (funLocalLookup env fn) --TODO fun shadowing var/fun test
@@ -184,7 +184,7 @@ typeCheckDec env (FunDeclaration _ name fields Nothing e) = do --Untyped functio
   return (name, t)
 
 typeCheckDec env (FunDeclaration _ name fields (Just t) e) = do
-  t' <- lookupArgTy env t
+  t' <- typeToTy env t
   env' <- mkFnScope env fields
   t'' <- typeCheckE env' e
   if t' /= t''
@@ -198,24 +198,24 @@ typeCheckDec _ _ = undefined --TODO!!
 
 lookupArgTyField :: Environment a -> TyField a -> TypeCheckM (Name a, Ty a)
 lookupArgTyField env (TyField _ n t) = do
-  ty <- lookupArgTy env t
+  ty <- typeToTy env t
   return (n, ty)
 
 --TODO rename this to typeToTy, this just resolves Types to Tys in an environment
-lookupArgTy :: Environment a -> Type a -> TypeCheckM (Ty a)
-lookupArgTy env (TVar _ n@(Name _ s)) | s == "int"    = return TigInt
+typeToTy :: Environment a -> Type a -> TypeCheckM (Ty a)
+typeToTy env (TVar _ n@(Name _ s)) | s == "int"    = return TigInt
                                       | s == "string" = return TigString
                                       | otherwise = case typeLookup env n of
                                                       Nothing -> throwError MissingTypeNameAliasingError
                                                       Just t -> return t
-lookupArgTy _ _ = undefined --TODO
+typeToTy _ _ = undefined --TODO
 
 mkFnScope :: Environment a -> [TyField a] -> TypeCheckM (Environment a)
 mkFnScope env fields = do
   let ins (n,t) e = insertVarScopeEnv e n t
   fieldsTyP <- forM fields $ do
     (\(TyField _ n fulltype) -> do
-      t <- lookupArgTy env fulltype
+      t <- typeToTy env fulltype
       return (n,t))
   return $ foldr ins (mkScope env) fieldsTyP
 
@@ -229,7 +229,7 @@ mkFnScope env fields = do
 
 typeCheckTyDec :: Eq a => Environment a -> Name a -> Type a -> TypeCheckM (Name a,Ty a)
 typeCheckTyDec env name t@(TVar _ _) = do
-  t' <- lookupArgTy env t
+  t' <- typeToTy env t
   return (name, t')
 
 typeCheckTyDec env name (TRecord _ fields) = do
@@ -299,6 +299,7 @@ typeCheckE env (WhileExpr _ cond e) = do
     _ -> throwError InvalidWhileCondTypeError
 
 --TODO body may not assign to forVarName
+-- We can tag var entry w/ a flag if its ReadOnly
 typeCheckE env (ForExpr lxr_range forVarName forVarEStart forVarEEnd body) = do
   tstart <- typeCheckE env forVarEStart
   tend <- typeCheckE env forVarEEnd
