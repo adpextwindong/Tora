@@ -238,6 +238,13 @@ arrayTests = TestLabel "Array Tests" $ TestList [
    ,validTyCheck "Simple Array Nil" simpleArrayNil
   ]
 
+simpleUnaryNegateExpr = testParse [tigerSrc| - 5 |]
+
+--TODO binary op tests
+binOpTests = TestLabel "Binary Op Tests" $ TestList [
+  --TODO
+  ]
+
 exprTests = TestList [
    validTyCheck "Simple nil expr" tyNilProgExpr
    ,validTyCheck "Simple int lit expr" tyIntLitProgExpr
@@ -268,7 +275,9 @@ exprTests = TestList [
    ,invalidTyCheck "For Body Bad Init Start Type" InvalidForStartEndTypeError forBodyBadHeadLeft
    ,invalidTyCheck "For Body Bad Init End Type" InvalidForStartEndTypeError forBodyBadHeadRight
    ,validTyCheck "For Body Must Return NoValue Type" forBodyMustReturnNothing
-   --TODO
+   ,validTyCheck "Simple Unary Negate Expr" simpleUnaryNegateExpr
+
+   ,binOpTests --TODO
   ]
 
 astTests = TestList [

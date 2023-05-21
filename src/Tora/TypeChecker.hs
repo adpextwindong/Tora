@@ -57,7 +57,8 @@ data TypeError = AssertTyError
                | CallingVarAsFunError --TODO test
                | FunCallArgTypeMismatchError --TODO test
                | InvalidArrayInitTypeError
-
+               | UndefinedBinOpApplicationError
+               | UndefinedUnaryNegateApplicationError
                deriving (Show, Eq)
 
 assertTyE :: (Show a, Eq a) => Environment a -> Expr a -> Ty a -> TypeCheckM ()
@@ -359,9 +360,13 @@ typeCheckE env (BinOpExpr _ e op e') = do --TODO
   t' <- typeCheckE env e'
   if t /= t'
   then throwError BinOpTypeMismatch
-  else checkBinOp op t t' --TODO operator handling
+  else checkBinOp op t t'
 
-typeCheckE env (UnaryNegate _ e) = undefined --TODO
+typeCheckE env (UnaryNegate _ e) = do
+  t <- typeCheckE env e
+  if t == TigInt
+  then return TigInt
+  else throwError UndefinedUnaryNegateApplicationError
 
 --TENTATIVE
 typeCheckE env (LValueExpr _ (LValueBase _ n)) = do
@@ -372,15 +377,30 @@ typeCheckE env (LValueExpr _ (LValueBase _ n)) = do
 
 typeCheckE env (LValueExpr _ _) = undefined -- TODO
 
+--TODO add a flag to VarEntry to mark Forloop vars to avoid assignments to them
 typeCheckE env (AssignmentExpr _ lvalue e) = undefined --TODO
 
 typeCheckE _ w | traceTrick w = undefined
 --TODO typeCheck EXPR(..)
 
+--TODO tests for this
+checkBinOp :: Operator a -> Ty a -> Ty a -> TypeCheckM (Ty a)
+checkBinOp (BoolAndOp _) TigInt TigInt = return TigInt
+checkBinOp (BoolOrOp _) TigInt TigInt = return TigInt
+checkBinOp (MulOp _) TigInt TigInt = return TigInt
+checkBinOp (DivOp _) TigInt TigInt = return TigInt
 checkBinOp (PlusOp _) TigInt TigInt = return TigInt
+checkBinOp (PlusOp _) TigString TigString = return TigString
 checkBinOp (MinusOp _) TigInt TigInt = return TigInt
-checkBinOp (EqualOp _) TigInt TigInt = return TigInt
-checkBinOp _ t t' = undefined --TODO
+checkBinOp (EqualOp _) t t' = return t
+checkBinOp (NEqualOp _) t t' = return t
+checkBinOp (GTOp _) TigInt TigInt = return TigInt
+checkBinOp (LTOp _) TigInt TigInt = return TigInt
+checkBinOp (GTEOp _) TigInt TigInt = return TigInt
+checkBinOp (LTEOp _) TigInt TigInt = return TigInt
+checkBinOp _ _ _ = throwError UndefinedBinOpApplicationError
+
+
 
 checkMatchingRecConStructure :: (Show a, Eq a) => Environment a -> [(Name a, Ty a)] -> [(Name a, Expr a)] -> TypeCheckM ()
 checkMatchingRecConStructure env definitionTys exprFields =
