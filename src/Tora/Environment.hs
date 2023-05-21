@@ -57,7 +57,9 @@ insertTyScopeEnv EmptyEnv (Name _ n) t = LexicalScope M.empty (M.singleton n t) 
 insertTyScopeEnv (LexicalScope vE tS p) (Name _ n) t = LexicalScope vE tS' p
   where tS' = M.insert n t tS
 
-typeLookup :: Env b -> Name a -> Maybe b
+typeLookup :: Env (Ty a) -> Name a -> Maybe (Ty a)
+typeLookup _ (Name _ "int") = Just $ TigInt
+typeLookup _ (Name _ "string") = Just $ TigString
 typeLookup EmptyEnv _ = Nothing
 typeLookup (LexicalScope _  s p) name@(Name _ n) = case M.lookup n s of
                                                 Just t -> Just t

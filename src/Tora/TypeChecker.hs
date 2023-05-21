@@ -56,6 +56,7 @@ data TypeError = AssertTyError
                | MissingFunctionNameError --TODO test
                | CallingVarAsFunError --TODO test
                | FunCallArgTypeMismatchError --TODO test
+               | InvalidArrayInitTypeError
 
                deriving (Show, Eq)
 
@@ -243,7 +244,10 @@ typeCheckTyDec env name (TRecord _ fields) = do
     return $ (name, TigRecord tys unid)
   else throwError NonUniqueRecordFieldName --TODO test case
 
-typeCheckTyDec _ _ _ = undefined --TODO!!
+typeCheckTyDec env name (TArray _ fulltype) = do
+  (_,ty) <- typeCheckTyDec env name fulltype
+  return (name, TigArray ty name)
+
 --typeCheckTyDec TODO TRecord Nil Handling, TyField, Nil handling
 --typeCheckTyDec TODO TArray
 
@@ -326,11 +330,19 @@ typeCheckE env (FunCallExpr _ fn args) = do
       then return t
       else throwError FunCallArgTypeMismatchError
 
-typeCheckE env (ArrayInitExpr _ typename initCount initValue) = undefined --TODO
-  --typeToTy tn
-  --Check initCount : int
-  --typeCheckE env initValue
-  --return TigArray ty
+typeCheckE env (ArrayInitExpr _ typename initCount initValue) = do
+  case typeLookup env typename of
+    Nothing -> throwError MissingTypeNameAliasingError
+    (Just t) -> do
+      tCount <- typeCheckE env initCount
+      t' <- typeCheckE env initValue
+      let tyMatch = case t of
+                      TigArray ty _ -> ty == t'
+                      tym -> tym == t
+
+      if tCount == TigInt && (tyMatch || t' == TigNil)
+      then return $ TigArray t' typename
+      else throwError InvalidArrayInitTypeError
 
 typeCheckE env (RecordInitExpr _ n rfields) = do
   case typeLookup env n of

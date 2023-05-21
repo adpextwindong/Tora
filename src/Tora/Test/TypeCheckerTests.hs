@@ -220,6 +220,24 @@ fnTests = TestLabel "Function Tests" $ TestList [
     ,invalidTyCheck "Mutually Recursive Functions must be typed" MissingFunctionNameError mutuallyRecursiveFnMustBeTyped
   ]
 
+simpleArrayExpr = testParse [tigerSrc| var foo := int[3] of 3 |]
+simpleRecArrayExpr = testParse [tigerSrc| type rec = { val : int }
+                                          var foo := rec[3] of rec{val = 5} |]
+
+simpleArrayOfAlias = testParse [tigerSrc| type int_array = array of int
+                                     var table := int_array[100] of 0 |]
+
+simpleArrayNil = testParse [tigerSrc| type rec = { val : int }
+                                      type rec_arr = array of int
+                                      var table := rec_arr[2] of nil |]
+
+arrayTests = TestLabel "Array Tests" $ TestList [
+   validTyCheck "Simple Array Expr" simpleArrayExpr
+   ,validTyCheck "Simple Rec Array Expr" simpleRecArrayExpr
+   ,validTyCheck "Simple Array type alias" simpleArrayOfAlias
+   ,validTyCheck "Simple Array Nil" simpleArrayNil
+  ]
+
 exprTests = TestList [
    validTyCheck "Simple nil expr" tyNilProgExpr
    ,validTyCheck "Simple int lit expr" tyIntLitProgExpr
@@ -259,6 +277,7 @@ astTests = TestList [
   ,TestLabel "Expr Tests" exprTests
   ,shadowingTests
   ,fnTests
+  ,arrayTests
   --TODO
   ]
 
