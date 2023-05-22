@@ -15,7 +15,7 @@ data Ty a = TigInt
           | TigNil
           | TigUnit
           | TigNoValue
-  deriving Eq
+  deriving (Eq)
 
 ---------
 -- AST --

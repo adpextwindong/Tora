@@ -287,6 +287,23 @@ lvalueTests = TestList [
     ,validTyCheck "LValue Test Simple LValueBase" lvalueTestSimpleBase
   ]
 
+simpleAssignment = testParse [tigerSrc| var x := 3
+                                        var y :=((x := 10); 5) |]
+--TODO forloop assignment fail
+--TODO TigNoValue IFT test
+simpleRecLValueAssignment = testParse [tigerSrc| type rec = { val : int }
+                                                 var foo := rec { val = 1 }
+                                                 var x := ((foo.val := 3); 5) |]
+
+simpleArrayLValueAssignment = testParse [tigerSrc| var foo := int[3] of 3
+                                                   var x := ((foo[1] := 1); 5) |]
+
+assignmentTests = TestList [
+    validTyCheck "Simple Assignment Expr" simpleAssignment
+   ,validTyCheck "Simple Rec Assignment" simpleRecLValueAssignment
+   ,validTyCheck "Simple Array Assignment" simpleArrayLValueAssignment
+  ]
+
 exprTests = TestList [
    validTyCheck "Simple nil expr" tyNilProgExpr
    ,validTyCheck "Simple int lit expr" tyIntLitProgExpr
@@ -321,6 +338,7 @@ exprTests = TestList [
 
    ,binOpTests
    ,lvalueTests
+   ,assignmentTests
   ]
 
 astTests = TestList [

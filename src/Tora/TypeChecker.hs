@@ -62,6 +62,7 @@ data TypeError = AssertTyError
                | RecordWithMultipleMatchesError
                | RecordAccessOnNonRecordTypeError
                | NonIntegerArraySubscriptError
+               | AssignmentTypeMismatchError
                deriving (Show, Eq)
 
 assertTyE :: (Show a, Eq a) => Environment a -> Expr a -> Ty a -> TypeCheckM ()
@@ -121,6 +122,7 @@ typeCheckDecs env (d:ds) = do
     FunDeclaration _ fn argFullTypes mt _ -> do
       argstys <- mapM ((fmap snd) . (lookupArgTyField env)) argFullTypes
 
+      --TODO change this, FunDecls should have an empty env
       env'' <- case mt of
                     Nothing -> return env
                     Just fulltype -> do
@@ -392,13 +394,22 @@ typeCheckE env (LValueExpr _ (LValueArray a lvalue e)) = do
   case te of
     TigInt -> do
       t <- typeCheckE env (LValueExpr a lvalue)
-      return $ TigArray t
+      return t
     _ -> throwError NonIntegerArraySubscriptError
 
 --TODO add a flag to VarEntry to mark Forloop vars to avoid assignments to them
-typeCheckE _ w | traceTrick w = undefined
-typeCheckE env (AssignmentExpr _ lvalue e) = undefined --TODO
-
+typeCheckE env (AssignmentExpr a lvalue e) = do
+  ty <- typeCheckE env (LValueExpr a lvalue)
+  t <- typeCheckE env e
+  case ty of
+    TigArray ty' ->
+      if ty' == t
+      then return TigNoValue
+      else throwError AssignmentTypeMismatchError
+    _ ->
+      if ty == t
+      then return TigNoValue --TODO test this
+      else throwError AssignmentTypeMismatchError
 
 --TODO tests for this
 checkBinOp :: Operator a -> Ty a -> Ty a -> TypeCheckM (Ty a)
