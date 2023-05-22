@@ -59,6 +59,9 @@ data TypeError = AssertTyError
                | InvalidArrayInitTypeError
                | UndefinedBinOpApplicationError
                | UndefinedUnaryNegateApplicationError
+               | RecordWithMultipleMatchesError
+               | RecordAccessOnNonRecordTypeError
+               | NonIntegerArraySubscriptError
                deriving (Show, Eq)
 
 assertTyE :: (Show a, Eq a) => Environment a -> Expr a -> Ty a -> TypeCheckM ()
@@ -247,7 +250,7 @@ typeCheckTyDec env name (TRecord _ fields) = do
 
 typeCheckTyDec env name (TArray _ fulltype) = do
   (_,ty) <- typeCheckTyDec env name fulltype
-  return (name, TigArray ty name)
+  return (name, TigArray ty)
 
 --typeCheckTyDec TODO TRecord Nil Handling, TyField, Nil handling
 --typeCheckTyDec TODO TArray
@@ -338,11 +341,11 @@ typeCheckE env (ArrayInitExpr _ typename initCount initValue) = do
       tCount <- typeCheckE env initCount
       t' <- typeCheckE env initValue
       let tyMatch = case t of
-                      TigArray ty _ -> ty == t'
+                      TigArray ty -> ty == t'
                       tym -> tym == t
 
       if tCount == TigInt && (tyMatch || t' == TigNil)
-      then return $ TigArray t' typename
+      then return $ TigArray t'
       else throwError InvalidArrayInitTypeError
 
 typeCheckE env (RecordInitExpr _ n rfields) = do
@@ -368,20 +371,34 @@ typeCheckE env (UnaryNegate _ e) = do
   then return TigInt
   else throwError UndefinedUnaryNegateApplicationError
 
---TENTATIVE
 typeCheckE env (LValueExpr _ (LValueBase _ n)) = do
   case varLookup env n of
     Just (VarEntry t) -> return t
-    Just (FunEntry _ t) -> return t
-    Nothing -> throwError $ InvalidLValueBaseNameError
+    Nothing -> throwError InvalidLValueBaseNameError
 
-typeCheckE env (LValueExpr _ _) = undefined -- TODO
+typeCheckE env (LValueExpr a (LValueDot _ lvalue (Name _ accessor))) = do
+  ty <- typeCheckE env (LValueExpr a lvalue)
+  case ty of
+    TigRecord nts unid -> do
+      let matches = filter (\(Name _ n,t) -> n == accessor) nts
+      if length matches == 1 --there should only be one matching field
+      then return $ head (fmap snd matches)
+      else throwError RecordWithMultipleMatchesError
+    _ -> throwError RecordAccessOnNonRecordTypeError
+
+
+typeCheckE env (LValueExpr _ (LValueArray a lvalue e)) = do
+  te <- typeCheckE env e
+  case te of
+    TigInt -> do
+      t <- typeCheckE env (LValueExpr a lvalue)
+      return $ TigArray t
+    _ -> throwError NonIntegerArraySubscriptError
 
 --TODO add a flag to VarEntry to mark Forloop vars to avoid assignments to them
+typeCheckE _ w | traceTrick w = undefined
 typeCheckE env (AssignmentExpr _ lvalue e) = undefined --TODO
 
-typeCheckE _ w | traceTrick w = undefined
---TODO typeCheck EXPR(..)
 
 --TODO tests for this
 checkBinOp :: Operator a -> Ty a -> Ty a -> TypeCheckM (Ty a)

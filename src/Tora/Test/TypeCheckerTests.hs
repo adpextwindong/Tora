@@ -269,6 +269,24 @@ binOpTests = TestLabel "Binary Op Tests" $ TestList [
   ,validTyCheck "Simple Array Equality" simpleArrayEqual
   ]
 
+lvalueTestRec = testParse [tigerSrc| type rec = { val : int }
+                                     type foo = { baz : rec }
+                                     var b := rec { val = 3 }
+                                     var c := foo { baz = b }
+                                     var x := c.baz.val |]
+
+lvalueTestArray = testParse [tigerSrc| var z := int[3] of 3
+                                       var y := z[0] |]
+
+lvalueTestSimpleBase = testParse [tigerSrc| var x := 3
+                                            var y := x |]
+
+lvalueTests = TestList [
+    validTyCheck "LValue Test Record" lvalueTestRec
+    ,validTyCheck "LValue Test Array" lvalueTestRec
+    ,validTyCheck "LValue Test Simple LValueBase" lvalueTestSimpleBase
+  ]
+
 exprTests = TestList [
    validTyCheck "Simple nil expr" tyNilProgExpr
    ,validTyCheck "Simple int lit expr" tyIntLitProgExpr
@@ -302,6 +320,7 @@ exprTests = TestList [
    ,validTyCheck "Simple Unary Negate Expr" simpleUnaryNegateExpr
 
    ,binOpTests
+   ,lvalueTests
   ]
 
 astTests = TestList [

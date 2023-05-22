@@ -11,7 +11,7 @@ import Data.ByteString.Lazy.Char8 (ByteString)
 data Ty a = TigInt
           | TigString
           | TigRecord [(Name a, Ty a)] Unique
-          | TigArray (Ty a) (Name a)
+          | TigArray (Ty a)
           | TigNil
           | TigUnit
           | TigNoValue
