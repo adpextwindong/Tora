@@ -210,6 +210,9 @@ mutuallyRecursiveFnMustBeTyped = testParse [tigerSrc| function foo(x : int) =
                                                    then 0
                                                    else foo(1) |]
 
+funcEnvSimple = testParse [tigerSrc| var x := 5
+                                     function foo(y : int) =
+                                       if x = 1 then 2 else y |]
 
 fnTests = TestLabel "Function Tests" $ TestList [
     validTyCheck "Simple Untyped Function Decl" simpleFn
@@ -218,6 +221,7 @@ fnTests = TestLabel "Function Tests" $ TestList [
     ,invalidTyCheck "Recursive Functions must be typed" MissingFunctionNameError recursiveFnMustBeTyped
     ,validTyCheck "Simple Mutually Recursive Fn" mutuallyRecursiveFnSimple
     ,invalidTyCheck "Mutually Recursive Functions must be typed" MissingFunctionNameError mutuallyRecursiveFnMustBeTyped
+    ,invalidTyCheck "Func Env should not capture" InvalidLValueBaseNameError funcEnvSimple
   ]
 
 simpleArrayExpr = testParse [tigerSrc| var foo := int[3] of 3 |]

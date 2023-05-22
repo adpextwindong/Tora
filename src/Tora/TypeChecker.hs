@@ -122,12 +122,11 @@ typeCheckDecs env (d:ds) = do
     FunDeclaration _ fn argFullTypes mt _ -> do
       argstys <- mapM ((fmap snd) . (lookupArgTyField env)) argFullTypes
 
-      --TODO change this, FunDecls should have an empty env
       env'' <- case mt of
-                    Nothing -> return env
+                    Nothing -> return EmptyEnv
                     Just fulltype -> do
                       ty <- typeToTy env fulltype
-                      return $ insertFunScopeEnv env fn argstys ty
+                      return $ insertFunScopeEnv EmptyEnv fn argstys ty
 
       if isNothing (funLocalLookup env fn) --TODO fun shadowing var/fun test
       then
