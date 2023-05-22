@@ -240,9 +240,33 @@ arrayTests = TestLabel "Array Tests" $ TestList [
 
 simpleUnaryNegateExpr = testParse [tigerSrc| - 5 |]
 
---TODO binary op tests
+simpleRecEqual = testParse [tigerSrc| type rec = { val : int }
+                                      var a := rec { val = 1 }
+                                      var b := a
+                                      var t := a = b
+                                      var tp := a <> b |]
+
+simpleArrayEqual = testParse [tigerSrc| type foo = array of int
+                                        var a := foo[2] of 3
+                                        var b := a
+                                        var t := a = b
+                                        var tp := a <> b |]
+
+
+simpleAppendTest = testParse [tigerSrc| "foo" + "bar" |]
+
+simpleBinOpTests = fmap (validTyCheck "Simple Bin Op Test" . testParse) [x <> op <> y | x <- ["5"], op <- ops, y <- ["1"]]
+  where ops = ["&", "|", "*", "/", "+", "-", "=", "<>", "<", ">", "<=", ">="]
+
+simpleBinOpMismatchTests = fmap (invalidTyCheck "Simple Bin Op Mismatch Test" BinOpTypeMismatch . testParse) [x <> op <> y | x <- ["5"], op <- ops, y <- ["\"1\""]]
+  where ops = ["&", "|", "*", "/", "+", "-", "=", "<>", "<", ">", "<=", ">="]
+
 binOpTests = TestLabel "Binary Op Tests" $ TestList [
-  --TODO
+  TestList simpleBinOpTests
+  ,TestList simpleBinOpMismatchTests
+  ,validTyCheck "Simple Append Expr" simpleAppendTest
+  ,validTyCheck "Simple Record Equality" simpleRecEqual
+  ,validTyCheck "Simple Array Equality" simpleArrayEqual
   ]
 
 exprTests = TestList [
@@ -277,7 +301,7 @@ exprTests = TestList [
    ,validTyCheck "For Body Must Return NoValue Type" forBodyMustReturnNothing
    ,validTyCheck "Simple Unary Negate Expr" simpleUnaryNegateExpr
 
-   ,binOpTests --TODO
+   ,binOpTests
   ]
 
 astTests = TestList [
