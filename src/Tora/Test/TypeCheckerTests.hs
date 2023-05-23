@@ -170,11 +170,14 @@ forBodyCanShadow' = testParse [tigerSrc| var y : int := (for x := 0 to 10 do ();
                                          var x := "foo" |]
 
 
+forBodyReadOnly = testParse [tigerSrc| for x := 0 to 10 do (x := 5; ()) |]
+
 shadowingTests = TestLabel "Shadowing Tests" $ TestList [
     validTyCheck "Let Expr Can Shadow" letExprCanShadow
     ,validTyCheck "Let Expr Can Shadow Reverse" letExprCanShadow'
     ,validTyCheck "For Body Can Shadow" forBodyCanShadow
     ,validTyCheck "For Body Can Shadow Reverse" forBodyCanShadow'
+    ,invalidTyCheck "For Body Read Only" WriteAgainstReadOnlyLValueError forBodyReadOnly
   ]
 
 simpleBreakWExpr = testParse [tigerSrc| while 5 do (break) |]

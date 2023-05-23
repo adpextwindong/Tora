@@ -63,6 +63,7 @@ data TypeError = AssertTyError
                | RecordAccessOnNonRecordTypeError
                | NonIntegerArraySubscriptError
                | AssignmentTypeMismatchError
+               | WriteAgainstReadOnlyLValueError
                deriving (Show, Eq)
 
 assertTyE :: (Show a, Eq a) => Environment a -> Expr a -> Ty a -> TypeCheckM ()
@@ -116,7 +117,7 @@ typeCheckDecs env (d:ds) = do
     VarDeclaration _ _ _ _ -> do --insert into varFun scope
       (name, ty) <- typeCheckDec env d
       if isNothing (varLocalLookup env name)
-      then return $ insertVarScopeEnv env name ty
+      then return $ insertVarScopeEnv env name ty False
       else throwError VarFunDecShadowError
 
     FunDeclaration _ fn argFullTypes mt _ -> do
@@ -143,9 +144,11 @@ typeCheckDec env (TypeDeclaration info name ty) | isReservedTyName name = throwE
 
 typeCheckDec env (VarDeclaration _ name Nothing (NilExpr _)) = throwError RawVarNilDeclError
 typeCheckDec env (VarDeclaration _ name Nothing e) = do
-  tyE <- typeCheckE env e --TODO typeCheckE completeness
+  tyE <- typeCheckE env e
   return $ (name, tyE)
 
+--typeCheckDec env (VarDeclaration _ name (Just t) (NilExpr _)) = TODO! CHECK T FOR RECORD TYPE SEE PAGE 516 EX1
+--
 typeCheckDec env (VarDeclaration _ name (Just (TVar _ n@(Name _ "int"))) e) = do
   tyE <- typeCheckE env e
   if tyE == TigInt
@@ -174,7 +177,6 @@ typeCheckDec env decl@(VarDeclaration _ name t@(Just (TVar _ nt@(Name _ tn))) e@
     checkMatchingRecUnid env (TigRecord _ u) (Just (TigRecord _ u')) =
       unless (u == u') $ throwError RecordTypeMismatchError
 
-
 typeCheckDec env (VarDeclaration _ name (Just (TVar _ tn@(Name _ _))) e) = do --TODO TEST
   tyE <- typeCheckE env e
   case typeLookup env tn of
@@ -182,7 +184,6 @@ typeCheckDec env (VarDeclaration _ name (Just (TVar _ tn@(Name _ _))) e) = do --
     Just t' -> do
       assertTyE env e t'
       return $ (name, t')
-
 
 typeCheckDec env (FunDeclaration _ name fields Nothing e) = do --Untyped function
   env' <- mkFnScope env fields
@@ -218,19 +219,13 @@ typeToTy _ _ = undefined --TODO
 
 mkFnScope :: Environment a -> [TyField a] -> TypeCheckM (Environment a)
 mkFnScope env fields = do
-  let ins (n,t) e = insertVarScopeEnv e n t
+  let ins (n,t) e = insertVarScopeEnv e n t False
   fieldsTyP <- forM fields $ do
     (\(TyField _ n fulltype) -> do
       t <- typeToTy env fulltype
       return (n,t))
   return $ foldr ins (mkScope env) fieldsTyP
 
-
---typeCheckDec env (VarDeclaration _ name (Just t) (NilExpr _)) = TODO! CHECK T FOR RECORD TYPE SEE PAGE 516 EX1
---typeCheckDec env (VarDeclaration _ name (Just t) e) = TODO! CHECK T AGAINST ty of e, typeToTy for eq'ing
---
---typeCheckDec TODO VarDecl
---typeCheckDec TODO FunDecl
 
 
 typeCheckTyDec :: Eq a => Environment a -> Name a -> Type a -> TypeCheckM (Name a,Ty a)
@@ -252,9 +247,6 @@ typeCheckTyDec env name (TRecord _ fields) = do
 typeCheckTyDec env name (TArray _ fulltype) = do
   (_,ty) <- typeCheckTyDec env name fulltype
   return (name, TigArray ty)
-
---typeCheckTyDec TODO TRecord Nil Handling, TyField, Nil handling
---typeCheckTyDec TODO TArray
 
 typeCheckField :: Eq a => Environment a -> TyField a -> TypeCheckM (Name a, Ty a)
 typeCheckField env (TyField _ n t) = typeCheckTyDec env n t
@@ -307,15 +299,13 @@ typeCheckE env (WhileExpr _ cond e) = do
         _ -> throwError InvalidWhileBodyTypeError
     _ -> throwError InvalidWhileCondTypeError
 
---TODO body may not assign to forVarName
--- We can tag var entry w/ a flag if its ReadOnly
 typeCheckE env (ForExpr lxr_range forVarName forVarEStart forVarEEnd body) = do
   tstart <- typeCheckE env forVarEStart
   tend <- typeCheckE env forVarEEnd
 
   when (tstart /= TigInt || tend /= TigInt) $ throwError InvalidForStartEndTypeError
 
-  let env' = insertVarScopeEnv (mkScope env) forVarName TigInt
+  let env' = insertVarScopeEnv (mkScope env) forVarName TigInt True
   tbody <- typeCheckE env' body
 
   case tbody of
@@ -328,7 +318,7 @@ typeCheckE _ (BreakExpr _) = return $ TigNoValue
 typeCheckE env (FunCallExpr _ fn args) = do
   case funLookup env fn of
     Nothing -> throwError MissingFunctionNameError --TODO test
-    Just (VarEntry _) -> throwError CallingVarAsFunError --TODO test
+    Just (VarEntry _ _) -> throwError CallingVarAsFunError --TODO test
     Just (FunEntry argts t) -> do
       tys <- mapM (typeCheckE env) args
       if tys == argts
@@ -374,7 +364,7 @@ typeCheckE env (UnaryNegate _ e) = do
 
 typeCheckE env (LValueExpr _ (LValueBase _ n)) = do
   case varLookup env n of
-    Just (VarEntry t) -> return t
+    Just (VarEntry t _) -> return t
     Nothing -> throwError InvalidLValueBaseNameError
 
 typeCheckE env (LValueExpr a (LValueDot _ lvalue (Name _ accessor))) = do
@@ -387,7 +377,6 @@ typeCheckE env (LValueExpr a (LValueDot _ lvalue (Name _ accessor))) = do
       else throwError RecordWithMultipleMatchesError
     _ -> throwError RecordAccessOnNonRecordTypeError
 
-
 typeCheckE env (LValueExpr _ (LValueArray a lvalue e)) = do
   te <- typeCheckE env e
   case te of
@@ -396,8 +385,15 @@ typeCheckE env (LValueExpr _ (LValueArray a lvalue e)) = do
       return t
     _ -> throwError NonIntegerArraySubscriptError
 
---TODO add a flag to VarEntry to mark Forloop vars to avoid assignments to them
 typeCheckE env (AssignmentExpr a lvalue e) = do
+  let isReadOnlyLValue = (\case
+                            LValueBase _ n ->
+                              case varLookup env n of
+                                Just (VarEntry _ True) -> True
+                                _ -> False
+                            _ -> False)
+  when (isReadOnlyLValue lvalue) $ throwError WriteAgainstReadOnlyLValueError
+
   ty <- typeCheckE env (LValueExpr a lvalue)
   t <- typeCheckE env e
   case ty of
@@ -410,7 +406,6 @@ typeCheckE env (AssignmentExpr a lvalue e) = do
       then return TigNoValue --TODO test this
       else throwError AssignmentTypeMismatchError
 
---TODO tests for this
 checkBinOp :: Operator a -> Ty a -> Ty a -> TypeCheckM (Ty a)
 checkBinOp (BoolAndOp _) TigInt TigInt = return TigInt
 checkBinOp (BoolOrOp _) TigInt TigInt = return TigInt
@@ -427,8 +422,6 @@ checkBinOp (GTEOp _) TigInt TigInt = return TigInt
 checkBinOp (LTEOp _) TigInt TigInt = return TigInt
 checkBinOp _ _ _ = throwError UndefinedBinOpApplicationError
 
-
-
 checkMatchingRecConStructure :: (Show a, Eq a) => Environment a -> [(Name a, Ty a)] -> [(Name a, Expr a)] -> TypeCheckM ()
 checkMatchingRecConStructure env definitionTys exprFields =
   let ns (Name _ s) = s in
@@ -439,38 +432,4 @@ checkMatchingRecConStructure env definitionTys exprFields =
       unless (tyDef == eTy) $ throwError RecordExprTyFieldMismatch
   else throwError RecordFieldExprNameMismatch
 
-
-
-
---TODO walk through the AST types and make tests
 --TODO nil belongs to any record type
---TODO array type uniqueness
---TODO recurisve functions need to be typechecked carefully
---SKIP? Mutually recursive functions
---Nesting of break statements
---
-
-{-
- -
- - AST TODO
- - Declaration
- -  - TypeDeclaration
- -     - typeCheckTyDec completeness
- -
- -  - VarDeclaration
- -    - Nil Handling for record
- -    - Record and Array
- -
- -  - FunDeclaration
- -    -TODO
- -
- - Type
- -  - TVar
- -  - TRecord
- -  - TArray
- -
- - TyField
-
- - Expr
- - LValue
--}
