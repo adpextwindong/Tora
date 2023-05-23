@@ -63,7 +63,6 @@ typeDeclTests = TestList [
     ,validTyCheck "Simple Record Type Decl" tyDecRecordSimpleTest
   ]
 
-varDeclRawToNil = testParse [tigerSrc| var a := nil |]
 
 varDeclSimpleRecord = testParse [tigerSrc| type rec = { val : int }
                                            var foo := rec { val = 42 } |]
@@ -83,7 +82,6 @@ varDeclSplitTypedRecordLongBroken = testParse [tigerSrc| type rec = { val : stri
                                           var foo : rec := rec { val = 42, quux = 666 } |]
 
 
-untypedVarDeclAssignedAsNilTest = invalidTyCheck "Untyped Var Decl Assigned as Nil" RawVarNilDeclError varDeclRawToNil
 
     --TODO {- type rec = { val : int } var foo : rec = rec { val = int } }
 varDeclNoTypeDeclRec = testParse [tigerSrc| var foo : rec := rec { val = int } |]
@@ -99,8 +97,7 @@ undeclaredRecTypeVarDecl = testParse [tigerSrc| type rec = { val : int }
                                                  var foo : rec := baz { val = 1 } |]
 
 varDeclTests = TestList [
-  untypedVarDeclAssignedAsNilTest
-  ,validTyCheck "Int Ty Var Decl" tyIntVarTypedSimple
+  validTyCheck "Int Ty Var Decl" tyIntVarTypedSimple
   ,validTyCheck "String Ty Var Decl" tyStringVarTypedSimple
   ,invalidTyCheck "Var Expr Type Decl Mismatch" TypeLiteralMismatchError $ testParse
     [tigerSrc| var x : string := 5|]
@@ -358,10 +355,79 @@ astTests = TestList [
   --TODO
   ]
 
+nil_varRecDecl = testParse [tigerSrc| type my_record = { val : int }
+                                      var a : my_record := nil |]
+
+nil_varAssignRecNil = testParse [tigerSrc| type rec = { val : int }
+                                           var a : rec := nil
+                                           var b := ((a := nil); 5) |]
+
+nil_IFT_NEQ_LEFT = testParse [tigerSrc| type rec = { val : int }
+                                           var a : rec := nil
+                                           var b := ((if a <> nil then ()); 5) |]
+
+nil_IFT_NEQ_RIGHT = testParse [tigerSrc| type rec = { val : int }
+                                           var a : rec := nil
+                                           var b := ((if nil <> a then ()); 5) |]
+
+nil_IFE_NEQ_LEFT = testParse [tigerSrc| type rec = { val : int }
+                                           var a : rec := nil
+                                           var b := (if a <> nil then 5 else 6) |]
+
+nil_IFE_NEQ_RIGHT = testParse [tigerSrc| type rec = { val : int }
+                                           var a : rec := nil
+                                           var b := (if nil <> a then 5 else 6) |]
+
+nil_IFT_EQ_LEFT = testParse [tigerSrc| type rec = { val : int }
+                                       var a : rec := nil
+                                       var b := ((if a = nil then ()); 5) |]
+
+nil_IFT_EQ_RIGHT = testParse [tigerSrc| type rec = { val : int }
+                                        var a : rec := nil
+                                        var b := ((if nil = a then ()); 5) |]
+
+nil_IFE_EQ_LEFT = testParse [tigerSrc| type rec = { val : int }
+                                       var a : rec := nil
+                                       var b := (if a = nil then 5 else 6) |]
+
+nil_IFE_EQ_RIGHT = testParse [tigerSrc| type rec = { val : int }
+                                        var a : rec := nil
+                                        var b := (if nil = a then 5 else 6) |]
+
+varDeclRawToNil = testParse [tigerSrc| var a := nil |]
+nilITE_EqualsIllegal = testParse [tigerSrc| if nil = nil then 5 else 5 |]
+nilIFT_EqualsIllegal = testParse [tigerSrc| if nil = nil then (5;()) |]
+
+funRecNilDeclUntyped = testParse [tigerSrc| type rec = { val : int }
+                                            function foo(x : rec) = 5
+                                            var a := foo(nil) |]
+
+funRecNilDeclTyped = testParse [tigerSrc| type rec = { val : int }
+                                            function foo(x : rec) : int = 5
+                                            var a := foo(nil) |]
+
 nilHandlingTests = TestLabel "Nil Handling Failure Tests" $ TestList [
-  untypedVarDeclAssignedAsNilTest
-  --TODO
-    ]
+    validTyCheck "Record Var Dec equal nil" nil_varRecDecl
+    ,validTyCheck "Record Var Assign nil" nil_varAssignRecNil
+    ,validTyCheck "Nil IFT NEQ LEFT" nil_IFT_NEQ_LEFT
+    ,validTyCheck "Nil IFT NEQ RIGHT" nil_IFT_NEQ_RIGHT
+
+    ,validTyCheck "Nil IFE NEQ LEFT" nil_IFE_NEQ_LEFT
+    ,validTyCheck "Nil IFE NEQ RIGHT" nil_IFE_NEQ_RIGHT
+
+    ,validTyCheck "Nil IFT EQ LEFT" nil_IFT_EQ_LEFT
+    ,validTyCheck "Nil IFT EQ RIGHT" nil_IFT_EQ_RIGHT
+
+    ,validTyCheck "Nil IFE EQ RIGHT" nil_IFE_EQ_LEFT
+    ,validTyCheck "Nil IFE EQ RIGHT" nil_IFE_EQ_RIGHT
+
+    ,validTyCheck "Function Untyped Nil Rec Call" funRecNilDeclUntyped
+    ,validTyCheck "Function Typed Nil Rec Call" funRecNilDeclTyped
+    --
+    ,invalidTyCheck "Untyped Var Decl Assigned as Nil" RawVarNilDeclError varDeclRawToNil
+    ,invalidTyCheck "ITE Nil Equals Illegal" InvalidIFECondTypeError nilITE_EqualsIllegal
+    ,invalidTyCheck "IFT Nil Equals Illegal" IfThenTypeMismatchError nilIFT_EqualsIllegal
+  ]
 
 
 tests = TestList [
@@ -405,14 +471,4 @@ invalidTyCheck caseName err inputProg = TestLabel caseName $ TestCase $ do
 --
 -- Should fail to type check
 --
-{-
 --TODO expand on these examples from pg 516 to do proper typechecking on. Give missing types, var decls etc...
-testParse [tigerSrc| var a : my_record := nil |] -- OK
-testParse [tigerSrc| a := nil |] -- OK
-testParse [tigerSrc| if a <> nil then ... |] -- OK
-testParse [tigerSrc| if nil <> a then ... |] -- OK
-testParse [tigerSrc| if a = nil then ... |] -- OK
-testParse [tigerSrc| function f(p: my_record) = ... f(nil) |] -- OK
-testParse [tigerSrc| var a := nil |] -- ILLEGAL IMPLEMENTED
-testParse [tigerSrc| if nil = nil then ... |] -- ILLEGAL
--}

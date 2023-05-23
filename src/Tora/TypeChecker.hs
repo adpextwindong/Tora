@@ -13,6 +13,7 @@ import Tora.Environment (Environment, Env(..), EnvEntry(..),
   varLocalLookup, funLocalLookup , typeLocalLookup, -- Just used for local shadowing checks
   insertVarScopeEnv, insertTyScopeEnv, -- This handling in particular
   insertFunScopeEnv,
+  retainTypeScopeBareVars,
   typeLookup, varLookup, funLookup,
   mkScope)
 
@@ -123,11 +124,12 @@ typeCheckDecs env (d:ds) = do
     FunDeclaration _ fn argFullTypes mt _ -> do
       argstys <- mapM ((fmap snd) . (lookupArgTyField env)) argFullTypes
 
+      let fnEnv = retainTypeScopeBareVars env
       env'' <- case mt of
-                    Nothing -> return EmptyEnv
+                    Nothing -> return fnEnv
                     Just fulltype -> do
                       ty <- typeToTy env fulltype
-                      return $ insertFunScopeEnv EmptyEnv fn argstys ty
+                      return $ insertFunScopeEnv fnEnv fn argstys ty
 
       if isNothing (funLocalLookup env fn) --TODO fun shadowing var/fun test
       then
@@ -182,8 +184,11 @@ typeCheckDec env (VarDeclaration _ name (Just (TVar _ tn@(Name _ _))) e) = do --
   case typeLookup env tn of
     Nothing -> throwError MissingTypeNameAliasingError
     Just t' -> do
-      assertTyE env e t'
-      return $ (name, t')
+      case (t', tyE) of
+        (TigRecord _ _ , TigNil) -> return (name, t')
+        _ ->  do
+          assertTyE env e t'
+          return $ (name, t')
 
 typeCheckDec env (FunDeclaration _ name fields Nothing e) = do --Untyped function
   env' <- mkFnScope env fields
@@ -320,8 +325,13 @@ typeCheckE env (FunCallExpr _ fn args) = do
     Nothing -> throwError MissingFunctionNameError --TODO test
     Just (VarEntry _ _) -> throwError CallingVarAsFunError --TODO test
     Just (FunEntry argts t) -> do
-      tys <- mapM (typeCheckE env) args
-      if tys == argts
+      etys <- mapM (typeCheckE env) args
+
+      if all (\p@(ft, et) ->
+        case p of
+          (TigRecord _ _, TigNil) -> True
+          _ -> ft == et ) (zip argts etys)
+
       then return t
       else throwError FunCallArgTypeMismatchError
 
@@ -352,7 +362,7 @@ typeCheckE _ (NoValueExpr _) = return TigNoValue
 typeCheckE env (BinOpExpr _ e op e') = do --TODO
   t <- typeCheckE env e
   t' <- typeCheckE env e'
-  if t /= t'
+  if t /= t' && (t /= TigNil) && (t' /= TigNil)
   then throwError BinOpTypeMismatch
   else checkBinOp op t t'
 
@@ -397,6 +407,10 @@ typeCheckE env (AssignmentExpr a lvalue e) = do
   ty <- typeCheckE env (LValueExpr a lvalue)
   t <- typeCheckE env e
   case ty of
+    TigRecord _ _ ->
+      if t == TigNil || ty == t
+      then return TigNoValue
+      else throwError AssignmentTypeMismatchError
     TigArray ty' ->
       if ty' == t
       then return TigNoValue
@@ -414,6 +428,11 @@ checkBinOp (DivOp _) TigInt TigInt = return TigInt
 checkBinOp (PlusOp _) TigInt TigInt = return TigInt
 checkBinOp (PlusOp _) TigString TigString = return TigString
 checkBinOp (MinusOp _) TigInt TigInt = return TigInt
+checkBinOp (NEqualOp _) t@(TigRecord _ _) TigNil = return TigInt --NEQ returns a boolean for IFT/IFE
+checkBinOp (NEqualOp _) TigNil t@(TigRecord _ _) = return TigInt --NEQ returns a boolean for IFT/IFE
+
+checkBinOp (EqualOp _) t@(TigRecord _ _) TigNil = return TigInt --EQ returns a boolean for IFT/IFE
+checkBinOp (EqualOp _) TigNil t@(TigRecord _ _) = return TigInt --EQ returns a boolean for IFT/IFE
 checkBinOp (EqualOp _) t t' = return t
 checkBinOp (NEqualOp _) t t' = return t
 checkBinOp (GTOp _) TigInt TigInt = return TigInt
