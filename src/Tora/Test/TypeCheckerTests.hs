@@ -429,6 +429,15 @@ nilHandlingTests = TestLabel "Nil Handling Failure Tests" $ TestList [
     ,invalidTyCheck "IFT Nil Equals Illegal" IfThenTypeMismatchError nilIFT_EqualsIllegal
   ]
 
+blockStructureSimple = testParse [tigerSrc| function foo(x: int) =
+                                              let function bar(y: int) = y + x
+                                                in
+                                                  bar(x + 1)
+                                              end|]
+
+blockStructureTests = TestLabel "Block Strucute pg 132" $ TestList [
+    validTyCheck "Block Structure Simple" blockStructureSimple
+  ]
 
 tests = TestList [
    astTests
