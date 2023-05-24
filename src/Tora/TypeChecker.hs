@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE ConstraintKinds #-}
 
 module Tora.TypeChecker where
 
@@ -26,6 +27,9 @@ import Control.Monad.Except
 import Debug.Trace
 
 type TypeCheckM = ExceptT TypeError IO
+
+--Yeah I regret paramertizing the ast
+type Bullshit a = (Eq a)
 
 data TypeError = AssertTyError
                | ReservedBaseTyNameError
@@ -67,7 +71,7 @@ data TypeError = AssertTyError
                | WriteAgainstReadOnlyLValueError
                deriving (Show, Eq)
 
-assertTyE :: (Show a, Eq a) => Environment a -> Expr a -> Ty a -> TypeCheckM ()
+assertTyE :: (Bullshit a) => Environment a -> Expr a -> Ty a -> TypeCheckM ()
 assertTyE env expr t = do
   ty <- typeCheckE env expr
   if t == ty
@@ -77,13 +81,13 @@ assertTyE env expr t = do
 traceTrick v = trace ("\n\nFIXME:\n" <> show (void v) <> "\n") False
 traceTrick2 e t = trace ("\n\nFIXME:\n" <> show (void t) <> "\n" <> show (void e)) False
 
-typeCheckProg :: (Show a, Eq a) => Program a -> IO (Either TypeError ())
+typeCheckProg :: (Bullshit a) => Program a -> IO (Either TypeError ())
 typeCheckProg (ProgExpr _ e) = runExceptT $ void $ typeCheckE EmptyEnv e
 typeCheckProg (ProgDecls _ decs) = runExceptT $ void $ typeCheckDecs EmptyEnv decs
 
 consecTypedFns ds = takeWhile (\case { FunDeclaration _ _ _ (Just t) _ -> True; _ -> False }) ds
 
-typeCheckDecs :: (Show a, Eq a) => Environment a -> [Declaration a] -> TypeCheckM (Env (Ty a))
+typeCheckDecs :: (Bullshit a) => Environment a -> [Declaration a] -> TypeCheckM (Env (Ty a))
 typeCheckDecs env [] = return env
 typeCheckDecs env ds | (length (consecTypedFns ds)) > 1 = do
   let typedfns = consecTypedFns ds
@@ -109,16 +113,19 @@ typeCheckDecs env ds | (length (consecTypedFns ds)) > 1 = do
 
 typeCheckDecs env (d:ds) = do
   env' <- case d of
-    TypeDeclaration _ _ _ -> do --insert into typescope
-      (name, ty) <- typeCheckDec env d
+    TypeDeclaration _ name _ -> do --insert into typescope
+
+      --TODO hoist this into a consecTyDecs and tombstone the mutually recursive types at once
+      let envTOMB = insertTyScopeEnv env name (TigTOMBSTONE name)
+      (name, ty) <- typeCheckDec envTOMB d
       if isNothing (typeLocalLookup env name)
       then return $ insertTyScopeEnv env name ty
       else throwError TypeDecShadowError
 
-    VarDeclaration _ _ _ _ -> do --insert into varFun scope
-      (name, ty) <- typeCheckDec env d
-      if isNothing (varLocalLookup env name)
-      then return $ insertVarScopeEnv env name ty False
+    VarDeclaration _ varName  _ _ -> do --insert into varFun scope
+      (tn, ty) <- typeCheckDec env d
+      if isNothing (varLocalLookup env tn)
+      then return $ insertVarScopeEnv env varName ty False
       else throwError VarFunDecShadowError
 
     FunDeclaration _ fn argFullTypes mt _ -> do
@@ -140,7 +147,7 @@ typeCheckDecs env (d:ds) = do
 
   typeCheckDecs env' ds
 
-typeCheckDec :: (Show a, Eq a) => Environment a -> Declaration a -> TypeCheckM (Name a,Ty a)
+typeCheckDec :: Bullshit a => Environment a -> Declaration a -> TypeCheckM (Name a,Ty a)
 typeCheckDec env (TypeDeclaration info name ty) | isReservedTyName name = throwError ReservedBaseTyNameError
                                                 | otherwise = typeCheckTyDec env name ty
 
@@ -259,7 +266,7 @@ typeCheckField env (TyField _ n t) = typeCheckTyDec env n t
 isReservedTyName :: Name a -> Bool
 isReservedTyName (Name a name) = name == "int" || name == "string"
 
-typeCheckE :: (Show a, Eq a) => Env (Ty a) -> Expr a -> TypeCheckM (Ty a)
+typeCheckE :: (Bullshit a) => Env (Ty a) -> Expr a -> TypeCheckM (Ty a)
 typeCheckE _ (NilExpr _) = return TigNil
 typeCheckE _ (IntLitExpr _ _) = return TigInt
 typeCheckE _ (StringLitExpr _ _) = return TigString
@@ -441,14 +448,24 @@ checkBinOp (GTEOp _) TigInt TigInt = return TigInt
 checkBinOp (LTEOp _) TigInt TigInt = return TigInt
 checkBinOp _ _ _ = throwError UndefinedBinOpApplicationError
 
-checkMatchingRecConStructure :: (Show a, Eq a) => Environment a -> [(Name a, Ty a)] -> [(Name a, Expr a)] -> TypeCheckM ()
+checkMatchingRecConStructure :: Bullshit a => Environment a -> [(Name a, Ty a)] -> [(Name a, Expr a)] -> TypeCheckM ()
 checkMatchingRecConStructure env definitionTys exprFields =
   let ns (Name _ s) = s in
   if (ns . fst <$> definitionTys) == (ns . fst <$> exprFields)
-  then forM_ (zip (snd <$> definitionTys) (snd <$> exprFields)) $
-    \(tyDef, e) -> do
-      eTy <- typeCheckE env e
-      unless (tyDef == eTy) $ throwError RecordExprTyFieldMismatch
+  then forM_ (zip (snd <$> definitionTys) (snd <$> exprFields)) (matchTyDefAgainstExpr env)
   else throwError RecordFieldExprNameMismatch
+
+matchTyDefAgainstExpr :: Bullshit a => Environment a -> (Ty a, Expr a) -> TypeCheckM ()
+matchTyDefAgainstExpr env (TigTOMBSTONE tn, e) = do
+  et <- typeCheckE env e
+  let tyDef = typeLookup env tn
+  case (tyDef, et) of
+    (Just TigRecord{}, TigNil) -> return ()
+    (Just TigArray{}, TigNil) -> return ()
+    (Just tyDef, et) -> unless (tyDef == et) $ throwError RecordExprTyFieldMismatch
+
+matchTyDefAgainstExpr env (tyDef, e) = do
+  eTy <- typeCheckE env e
+  unless (tyDef == eTy) $ throwError RecordExprTyFieldMismatch
 
 --TODO nil belongs to any record type

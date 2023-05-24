@@ -15,6 +15,7 @@ data Ty a = TigInt
           | TigNil
           | TigUnit
           | TigNoValue
+          | TigTOMBSTONE (Name a)
   deriving (Eq)
 
 ---------
