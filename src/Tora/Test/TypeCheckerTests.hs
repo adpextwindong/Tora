@@ -435,8 +435,18 @@ blockStructureSimple = testParse [tigerSrc| function foo(x: int) =
                                                   bar(x + 1)
                                               end|]
 
+blockStructureNested = testParse [tigerSrc| function foo(x: int) =
+                                              let function bar(y: int) =
+                                                let function baz(z : int) = z + y + x + 100
+                                                in
+                                                  baz(2)
+                                                end
+                                              in bar(3)
+                                              end |]
+
 blockStructureTests = TestLabel "Block Strucute pg 132" $ TestList [
     validTyCheck "Block Structure Simple" blockStructureSimple
+    ,validTyCheck "Block Structure Simple" blockStructureNested
   ]
 
 tests = TestList [
