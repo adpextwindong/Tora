@@ -449,9 +449,25 @@ blockStructureTests = TestLabel "Block Strucute pg 132" $ TestList [
     ,validTyCheck "Block Structure Simple" blockStructureNested
   ]
 
+
+--Page 133
+recursiveConsListRecordTy = testParse [tigerSrc| type cons = { val : int, tail : cons }
+                                                      var y : cons := cons { val = 5, tail = nil } |]
+
+--Page 513
+mutuallyRecursiveTreeListTy =
+  testParse [tigerSrc| type tree = {key : int, children : treelist }
+                       type treelist = {hd: tree, tl: treelist } |]
+
+recursiveTypesTests = TestLabel "Recursive Types" $ TestList [
+    validTyCheck "Recursive Simple Cons Cell Record" recursiveConsListRecordTy
+--    ,validTyCheck "Mutually Recursive TreeList Record" mutuallyRecursiveTreeListTy
+  ]
+
 tests = TestList [
    astTests
    ,nilHandlingTests
+   ,blockStructureTests
    ]
 
 runTyCheckTests = runTestTT tests
